@@ -18,6 +18,9 @@ Hierarchy:
         - ref!! 5a1e0000-0000-4000-8000-00000000004c
         - ref!! 5a1e0000-0000-4000-8000-000000000050
         - ref!! 5a1e0000-0000-4000-8000-000000000054
+        - ref!! 5a1e0000-0000-4000-8000-000000000062
+        - ref!! 5a1e0000-0000-4000-8000-000000000072
+        - ref!! 5a1e0000-0000-4000-8000-000000000077
     Parts:
         -   Entity:
                 Id: 5a1e0000-0000-4000-8000-000000000031
@@ -198,6 +201,48 @@ Hierarchy:
                         KeyboardRotationSpeed: {X: 3.0, Y: 3.0}
                         MouseRotationSpeed: {X: 1.0, Y: 1.0}
                         TouchRotationSpeed: {X: 1.0, Y: 0.7}
+        -   Entity:
+                Id: 5a1e0000-0000-4000-8000-000000000062
+                Name: Glass sphere
+                Components:
+                    9c41f2a807d94b23a15f2d8e60c7b1aa: !TransformComponent
+                        Id: 5a1e0000-0000-4000-8000-000000000063
+                        Position: {X: -2.2, Y: 1.0, Z: 2.4}
+                        Rotation: {X: 0.0, Y: 0.0, Z: 0.0, W: 1.0}
+                        Scale: {X: 2.0, Y: 2.0, Z: 2.0}
+                        Children: {}
+                    b7d3e6f1c25a48f0a92e08d4c3f5a6bb: !ModelComponent
+                        Id: 5a1e0000-0000-4000-8000-000000000064
+                        Model: 5a1e0000-0000-4000-8000-000000000061:Sphere Glass
+                        Materials: {}
+        -   Entity:
+                Id: 5a1e0000-0000-4000-8000-000000000072
+                Name: Frosted glass sphere
+                Components:
+                    c1a5e8d2f47b4390b6e1d20a94c8e5cc: !TransformComponent
+                        Id: 5a1e0000-0000-4000-8000-000000000073
+                        Position: {X: 0.8, Y: 1.0, Z: 4.0}
+                        Rotation: {X: 0.0, Y: 0.0, Z: 0.0, W: 1.0}
+                        Scale: {X: 2.0, Y: 2.0, Z: 2.0}
+                        Children: {}
+                    d4f2b9a6e08c47c1953a7d1e6b2f4add: !ModelComponent
+                        Id: 5a1e0000-0000-4000-8000-000000000074
+                        Model: 5a1e0000-0000-4000-8000-000000000071:Sphere Frosted
+                        Materials: {}
+        -   Entity:
+                Id: 5a1e0000-0000-4000-8000-000000000077
+                Name: Tinted glass sphere
+                Components:
+                    e9b7c3d045a148e2871f6a3c5d90b2ee: !TransformComponent
+                        Id: 5a1e0000-0000-4000-8000-000000000078
+                        Position: {X: 3.6, Y: 1.0, Z: 3.4}
+                        Rotation: {X: 0.0, Y: 0.0, Z: 0.0, W: 1.0}
+                        Scale: {X: 2.0, Y: 2.0, Z: 2.0}
+                        Children: {}
+                    f0c8d5e2a6b34917842d1b7e9c3a5aff: !ModelComponent
+                        Id: 5a1e0000-0000-4000-8000-000000000079
+                        Model: 5a1e0000-0000-4000-8000-000000000076:Sphere Tinted
+                        Materials: {}
         -   Entity:
                 Id: 5a1e0000-0000-4000-8000-000000000054
                 Name: Voxel GI
