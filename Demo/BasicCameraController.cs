@@ -10,8 +10,17 @@ namespace Demo
     /// A script that allows to move and rotate an entity through keyboard, mouse and touch input to provide basic camera navigation.
     /// </summary>
     /// <remarks>
-    /// The entity can be moved using W, A, S, D, Q and E, arrow keys, a gamepad's left stick or dragging/scaling using multi-touch.
-    /// Rotation is achieved using the Numpad, the mouse while holding the right mouse button, a gamepad's right stick, or dragging using single-touch.
+    /// <para>
+    /// The keyboard only drives the camera while the right mouse button is held - the button that
+    /// already gates looking around - so the rest of the time the letter keys belong to the demo's
+    /// own hotkeys.
+    /// </para>
+    /// <para>
+    /// Move with WASD or ZQSD (both work, on either keyboard layout) or the arrow keys, C and
+    /// E/Space for down and up, Shift to go faster; or a gamepad's left stick, or dragging and
+    /// scaling with multi-touch. Rotation is the Numpad, the mouse while holding the right button, a
+    /// gamepad's right stick, or a single-touch drag.
+    /// </para>
     /// </remarks>
     public class BasicCameraController : SyncScript
     {
@@ -64,6 +73,13 @@ namespace Demo
             yaw = 0f;
             pitch = 0f;
 
+            // The keyboard only flies the camera while the right mouse button is held - the same
+            // button that already gates looking around. Otherwise WASDQE and the arrows are free for
+            // the demo's own hotkeys, several of which they would otherwise fight over: S is both
+            // "back" and the screenshot key, Q is both "down" and the quality cycle.
+            // The gamepad is left alone; it has no such conflict.
+            bool flying = Input.HasMouse && Input.IsMouseButtonDown(MouseButton.Right);
+
             // Keyboard and Gamepad based movement
             {
                 // Our base speed is: one unit per second:
@@ -98,11 +114,15 @@ namespace Demo
                     }
                 }
 
-                if (Input.HasKeyboard)
+                if (Input.HasKeyboard && flying)
                 {
-                    // Move with keyboard
+                    // Move with keyboard. Stride's Keys are the character the key produces, not its
+                    // position, and AZERTY swaps exactly two of the ones used here: A<->Q and W<->Z.
+                    // Accepting both spellings makes WASD and ZQSD the same keys under the hand on
+                    // either layout. Up/down cannot follow suit - Q is "down" on QWERTY and "left"
+                    // on AZERTY - so they moved to keys that sit in the same place on both.
                     // Forward/Backward
-                    if (Input.IsKeyDown(Keys.W) || Input.IsKeyDown(Keys.Up))
+                    if (Input.IsKeyDown(Keys.W) || Input.IsKeyDown(Keys.Z) || Input.IsKeyDown(Keys.Up))
                     {
                         dir.Z += 1;
                     }
@@ -112,7 +132,7 @@ namespace Demo
                     }
 
                     // Left/Right
-                    if (Input.IsKeyDown(Keys.A) || Input.IsKeyDown(Keys.Left))
+                    if (Input.IsKeyDown(Keys.A) || Input.IsKeyDown(Keys.Q) || Input.IsKeyDown(Keys.Left))
                     {
                         dir.X -= 1;
                     }
@@ -122,11 +142,11 @@ namespace Demo
                     }
 
                     // Down/Up
-                    if (Input.IsKeyDown(Keys.Q))
+                    if (Input.IsKeyDown(Keys.C))
                     {
                         dir.Y -= 1;
                     }
-                    if (Input.IsKeyDown(Keys.E))
+                    if (Input.IsKeyDown(Keys.E) || Input.IsKeyDown(Keys.Space))
                     {
                         dir.Y += 1;
                     }
@@ -165,7 +185,7 @@ namespace Demo
                     rotation.Y += -padState.RightThumb.X;
                 }
 
-                if (Input.HasKeyboard)
+                if (Input.HasKeyboard && flying)
                 {
                     if (Input.IsKeyDown(Keys.NumPad2))
                     {

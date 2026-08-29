@@ -4,21 +4,6 @@
 
 Real-time global illumination for [Stride](https://www.stride3d.net/), in one component.
 
-> **Blocked on the engine — do not publish yet.** `Stride.Voxels` cannot run on Stride 4.4's
-> SDSL compiler. Two separate gaps, found by running this demo:
->
-> 1. `LightVoxelShader.sdsl` opens with a `using` declaration, which the compiler errored on
->    outright. Fixed on the `fix-sdsl-using-namespace` branch of the Stride checkout (one case
->    added to `SDSLC.cs`).
-> 2. Past that, the compiler throws `NotImplementedException` on **literal-indexed shader
->    compositions** — `compose IVoxelSampler AttributeSamplers[]` then
->    `AttributeSamplers[0].Sample(...)` (`Expression.cs:1286`, case "array indexer for shader
->    compositions"). Composition *arrays* themselves work: the mixer expands
->    `foreach (x in Foo)` (`ShaderMixer.cs:831`). It is only direct indexing that was never
->    written. Every marching, storage and layout shader in `Stride.Voxels` indexes that way.
->
-> Everything below is written and builds; it renders as soon as (2) lands upstream.
-
 Stride already contains a full voxel cone tracing implementation (`Stride.Voxels`, by Sean
 Boettger) — it just ships switched off, undocumented, and spread over about a dozen types you have
 to assemble in the right order before a single photon bounces. This asset is that assembly: a
@@ -63,8 +48,11 @@ Entity.Scene.Entities.Add(gi);
 | `V` | Cycle the voxel views: off → ray-marched voxels → raw storage slice. |
 | `F` | Freeze voxelization (keeps lighting from the last capture — the right setting for static geometry). |
 | `Q` | Cycle Low / Medium / High / Ultra. |
-| `[` `]` | Lower / raise the bounce intensity. |
-| `WASD` + right-drag | Fly the camera. |
+| `O` | Cycle the voxelization thickening: 0, 1, 2, 4. |
+| `PgDn` `PgUp` | Step the mip level shown by the raw view. |
+| numpad `-` `+` | Lower / raise the bounce intensity. |
+| `Ctrl`+`S` | Save a PNG of the frame to `Screenshots/`. |
+| right-drag, `WASD`/`ZQSD` | Fly the camera. The keyboard only moves it while the right button is held, so the letter keys above stay free the rest of the time. `C` and `E`/`Space` go down and up, `Shift` goes faster. |
 
 ## The knobs that matter
 
@@ -101,7 +89,8 @@ package — the demo carries its own flattened copy so the asset works even if t
 
 ## Requirements & limits
 
-- Stride **4.4.0-beta5** or newer, and a **Feature Level 11** GPU — voxelization throws below it.
+- Stride **4.4**, and a **Feature Level 11** GPU — voxelization throws below it. The engine-side
+  fixes `Stride.Voxels` needs on 4.4 landed after `4.4.0-beta5`, so build against a newer engine.
 - Voxelization re-renders the scene into the voxel grid: cost scales with triangles *and* with
   volume resolution. Only one clipmap is refreshed per frame by default, which is why a fast-moving
   volume trails slightly behind.

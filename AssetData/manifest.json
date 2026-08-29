@@ -8,7 +8,16 @@
   "tags": ["gi", "global-illumination", "vxgi", "voxel-cone-tracing", "lighting", "rendering", "demo", "cornell-box"],
   "license": "MIT",
   "thumbnail": "thumbnail.png",
-  "media": [],
+  "media": [
+    "media/gi-ultra.png",
+    "media/gi-high.png",
+    "media/gi-medium.png",
+    "media/gi-low.png",
+    "media/voxel-view-cones.png",
+    "media/voxel-view-raw-mip0.png",
+    "media/voxel-view-raw-mip1.png",
+    "media/voxel-view-raw-mip2.png"
+  ],
   "dependencies": [],
   "defaultImport": "local"
 }

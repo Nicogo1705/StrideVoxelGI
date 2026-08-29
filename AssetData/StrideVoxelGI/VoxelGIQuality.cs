@@ -105,14 +105,37 @@ public sealed class VoxelGIPreset
     };
 
     /// <summary>
+    /// How much thin geometry is thickened during voxelization, or 0 to leave it alone.
+    /// <para>
+    /// Meshes are hollow: a wall, a box, a sphere are all zero-thickness surfaces. Voxelizing one
+    /// gives voxels that are only partly covered, and a cone marching through reads them as
+    /// half-transparent - the surface comes out dashed and light leaks through it. Opacify scales
+    /// that coverage up so a grazed surface still reads as solid.
+    /// </para>
+    /// <para>
+    /// Turn it down if thin geometry looks inflated, up if surfaces leak. It is no substitute for
+    /// voxels small enough to resolve the geometry: check the voxel size first.
+    /// </para>
+    /// </summary>
+    public float Opacify = 2.0f;
+
+    /// <summary>
     /// The one attribute voxel GI actually needs: per-voxel emitted radiance + opacity. Everything
     /// the cones read is written here during the voxelization pass.
     /// </summary>
-    public VoxelAttributeEmissionOpacity CreateAttribute() => new()
+    public VoxelAttributeEmissionOpacity CreateAttribute()
     {
-        VoxelLayout = Anisotropic ? new VoxelLayoutAnisotropic() : new VoxelLayoutIsotropic(),
-        LightFalloff = VoxelAttributeEmissionOpacity.LightFalloffs.Heuristic,
-    };
+        var attribute = new VoxelAttributeEmissionOpacity
+        {
+            VoxelLayout = Anisotropic ? new VoxelLayoutAnisotropic() : new VoxelLayoutIsotropic(),
+            LightFalloff = VoxelAttributeEmissionOpacity.LightFalloffs.Heuristic,
+        };
+
+        if (Opacify > 0f)
+            attribute.Modifiers.Add(new VoxelModifierEmissionOpacityOpacify { Amount = Opacify });
+
+        return attribute;
+    }
 
     /// <summary>The cone set traced for indirect diffuse.</summary>
     public IVoxelMarchSet CreateDiffuseMarcher()

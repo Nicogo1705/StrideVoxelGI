@@ -36,7 +36,9 @@ public class VoxelGIVolume : StartupScript
     private VoxelGIQuality quality = VoxelGIQuality.Medium;
     private float volumeSize = 24f;
     private float bounceIntensity = 1f;
+    private float secondBounce = 1f;
     private float specularIntensity = 1f;
+    private float opacify = 2f;
     private bool giEnabled = true;
     private bool voxelize = true;
     private VoxelGIDebugView debugView = VoxelGIDebugView.Off;
@@ -65,14 +67,45 @@ public class VoxelGIVolume : StartupScript
     }
 
     /// <summary>
-    /// Strength of the indirect diffuse bounce. 1 is "physical-ish"; artists routinely push 1.5-2
-    /// because a single bounce loses the energy the later bounces would have added.
+    /// Strength of the indirect light, as seen by the camera. 1 is "physical-ish"; artists
+    /// routinely push 1.5-2 because a single bounce loses the energy later ones would have added.
     /// </summary>
     [DataMember(30)]
     public float BounceIntensity
     {
         get => bounceIntensity;
         set { bounceIntensity = Math.Max(0f, value); Apply(); }
+    }
+
+    /// <summary>
+    /// How much of the indirect light is written back into the voxels, feeding the next bounce.
+    /// 0 gives a single bounce; 1 lets light keep spreading, at no extra cost but with a frame of
+    /// lag and a risk of runaway brightness in a closed white room.
+    /// </summary>
+    [DataMember(35)]
+    public float SecondBounce
+    {
+        get => secondBounce;
+        set { secondBounce = Math.Max(0f, value); Apply(); }
+    }
+
+    /// <summary>
+    /// How much thin geometry is thickened during voxelization - see <see cref="VoxelGIPreset.Opacify"/>.
+    /// Rebuilds the volume. Too high and a surface occludes the cones leaving it, which costs more
+    /// indirect light than the leaking it prevents.
+    /// </summary>
+    [DataMember(38)]
+    public float Opacify
+    {
+        get => opacify;
+        set
+        {
+            if (Math.Abs(opacify - value) < 0.0001f)
+                return;
+            opacify = Math.Max(0f, value);
+            if (Volume != null)
+                Rebuild();
+        }
     }
 
     /// <summary>Strength of the cone-traced specular (voxel reflections). 0 removes the look, not the cost.</summary>
@@ -110,6 +143,9 @@ public class VoxelGIVolume : StartupScript
         get => debugView;
         set { debugView = value; Apply(); }
     }
+
+    /// <summary>Rebuilds the debug visualization, picking up a changed <see cref="DebugMipmap"/>.</summary>
+    public void RefreshDebugView() => Apply();
 
     /// <summary>Which mipmap level <see cref="VoxelGIDebugView.Raw"/> slices through.</summary>
     [DataMember(80)]
@@ -163,36 +199,45 @@ public class VoxelGIVolume : StartupScript
     public void Rebuild()
     {
         Preset = VoxelGIPreset.For(quality);
+        Preset.Opacify = opacify;
 
-        if (Volume == null)
+        // Replace the volume and the light rather than reconfiguring them in place. Everything
+        // downstream caches by instance: the voxel renderer keys its per-volume data on the
+        // VoxelVolumeComponent, and the light renderer keys its shader group on the RenderLight and
+        // holds the attribute it last resolved. Swapping storage and attributes on a live volume
+        // left those caches straddling two generations, and the buffer-clearing dispatch sized its
+        // thread groups from one while writing the other's buffers - a hard crash inside D3D11.
+        // A quality change reallocates every voxel texture anyway, so there is nothing to save here.
+        if (Volume != null)
+            Entity.Remove(Volume);
+        if (lightEntity != null)
+            Entity.RemoveChild(lightEntity);
+
+        Volume = new VoxelVolumeComponent
         {
-            Volume = new VoxelVolumeComponent();
-            Entity.Add(Volume);
-        }
-
-        Volume.VoxelizationMethod = new VoxelizationMethodDominantAxis();
-        Volume.Storage = Preset.CreateStorage();
-        Volume.Attributes.Clear();
-        Volume.Attributes.Add(Preset.CreateAttribute());
-        Volume.VoxelGridSnapping = true;
-
-        if (lightEntity == null)
-        {
-            // The light lives on a child entity so this component never fights a LightComponent
-            // that is already on the entity it was dropped onto.
-            lightEntity = new Entity("Voxel GI Light");
-            Light = new LightComponent { Intensity = 1f };
-            lightEntity.Add(Light);
-            Entity.AddChild(lightEntity);
-        }
-
-        Light!.Type = new LightVoxel
-        {
-            Volume = Volume,
-            AttributeIndex = 0,
-            DiffuseMarcher = Preset.CreateDiffuseMarcher(),
-            SpecularMarcher = Preset.CreateSpecularMarcher(),
+            VoxelizationMethod = new VoxelizationMethodDominantAxis(),
+            Storage = Preset.CreateStorage(),
+            VoxelGridSnapping = true,
         };
+        Volume.Attributes.Add(Preset.CreateAttribute());
+        Entity.Add(Volume);
+
+        // The light lives on a child entity so this component never fights a LightComponent that is
+        // already on the entity it was dropped onto.
+        lightEntity = new Entity("Voxel GI Light");
+        Light = new LightComponent
+        {
+            Intensity = 1f,
+            Type = new LightVoxel
+            {
+                Volume = Volume,
+                AttributeIndex = 0,
+                DiffuseMarcher = Preset.CreateDiffuseMarcher(),
+                SpecularMarcher = Preset.CreateSpecularMarcher(),
+            },
+        };
+        lightEntity.Add(Light);
+        Entity.AddChild(lightEntity);
 
         Apply();
     }
@@ -214,18 +259,28 @@ public class VoxelGIVolume : StartupScript
         Volume.Visualization = CreateVisualization();
 
         Light.Enabled = giEnabled;
+
+        // How strong the indirect light looks is LightComponent.Intensity: LightVoxelShaderGroup
+        // reads it for the camera view and only folds BounceIntensityScale in when rendering into
+        // the voxels, where it decides how much of this bounce is re-injected for the next one.
+        // Driving BounceIntensityScale therefore changes nothing on screen, however far it is pushed.
+        Light.Intensity = bounceIntensity;
         if (Light.Type is LightVoxel voxelLight)
         {
-            voxelLight.BounceIntensityScale = bounceIntensity;
+            voxelLight.BounceIntensityScale = secondBounce;
             voxelLight.SpecularIntensityScale = specularIntensity;
         }
     }
 
     private IVoxelVisualization? CreateVisualization() => debugView switch
     {
+        // The beam advances one voxel per step, so a fixed step count makes the view's range
+        // shrink as voxels get smaller - at 256^3 it stopped about 11 units out, and the volume
+        // seemed to vanish when the camera backed away. Deriving the count from the volume keeps
+        // the range at roughly twice the volume whatever the quality, so the views compare.
         VoxelGIDebugView.Cones => new VoxelVisualizationView
         {
-            MarchMethod = new VoxelMarchBeam(200, 1.0f, 1.0f),
+            MarchMethod = new VoxelMarchBeam(Math.Clamp((int)(volumeSize * 2f / VoxelSize), 64, 1024), 1.0f, 1.0f),
             Background = new Color(0.05f, 0.05f, 0.07f, 1.0f),
         },
         VoxelGIDebugView.Raw => new VoxelVisualizationRaw

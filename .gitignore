@@ -12,3 +12,6 @@ _ReSharper*
 [Bb]in/
 obj/
 Cache/
+
+# Local test scaffolding: retargets the demo onto locally built engine packages.
+Directory.Build.targets

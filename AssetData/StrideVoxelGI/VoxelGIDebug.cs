@@ -1,8 +1,10 @@
-// Copyright (c) 2026 Nicogo. Distributed under the MIT license.
+﻿// Copyright (c) 2026 Nicogo. Distributed under the MIT license.
 using System;
+using System.IO;
 using Stride.Core;
 using Stride.Core.Mathematics;
 using Stride.Engine;
+using Stride.Graphics;
 using Stride.Input;
 
 namespace StrideVoxelGI;
@@ -49,11 +51,40 @@ public class VoxelGIDebug : SyncScript
 
     /// <summary>Lowers the bounce intensity by <see cref="BounceStep"/>.</summary>
     [DataMember(80)]
-    public Keys BounceDownKey { get; set; } = Keys.OemOpenBrackets;
+    public Keys BounceDownKey { get; set; } = Keys.Subtract;
 
     /// <summary>Raises the bounce intensity by <see cref="BounceStep"/>.</summary>
     [DataMember(90)]
-    public Keys BounceUpKey { get; set; } = Keys.OemCloseBrackets;
+    public Keys BounceUpKey { get; set; } = Keys.Add;
+
+    /// <summary>Steps the mip level shown by <see cref="VoxelGIDebugView.Raw"/> down and up.</summary>
+    [DataMember(92)]
+    public Keys MipDownKey { get; set; } = Keys.PageDown;
+
+    /// <inheritdoc cref="MipDownKey"/>
+    [DataMember(93)]
+    public Keys MipUpKey { get; set; } = Keys.PageUp;
+
+    /// <summary>Cycles the voxelization thickening: 0, 1, 2, 4.</summary>
+    [DataMember(95)]
+    public Keys CycleOpacifyKey { get; set; } = Keys.O;
+
+    /// <summary>Saves a PNG of the frame next to the executable. Hold Ctrl.</summary>
+    [DataMember(96)]
+    public Keys ScreenshotKey { get; set; } = Keys.S;
+
+    /// <summary>Where screenshots go. Relative paths resolve next to the executable.</summary>
+    [DataMember(97)]
+    public string ScreenshotDirectory { get; set; } = "Screenshots";
+
+    /// <summary>
+    /// Ignore the hotkeys while the right mouse button is held. Fly-through cameras claim the letter
+    /// keys for movement under that button, and several of them are hotkeys here too - strafing left
+    /// would otherwise also cycle the quality preset, on every AZERTY keyboard and on any QWERTY one
+    /// bound to ZQSD. Turn it off if your camera does not work that way.
+    /// </summary>
+    [DataMember(98)]
+    public bool SuspendWhileLookingAround { get; set; } = true;
 
     /// <summary>How much one bounce key press moves <see cref="VoxelGIVolume.BounceIntensity"/>.</summary>
     [DataMember(100)]
@@ -69,6 +100,14 @@ public class VoxelGIDebug : SyncScript
         var target = Target;
         if (target == null)
             return;
+
+        // The camera owns the keyboard while the look button is held; leave its keys alone and only
+        // draw the readout.
+        if (SuspendWhileLookingAround && Input.HasMouse && Input.IsMouseButtonDown(MouseButton.Right))
+        {
+            DrawOverlay(target);
+            return;
+        }
 
         if (Input.IsKeyPressed(ToggleGIKey))
             target.GIEnabled = !target.GIEnabled;
@@ -93,12 +132,37 @@ public class VoxelGIDebug : SyncScript
                 _ => VoxelGIQuality.Low,
             };
 
+        // The cones read mip 1 and up, the debug beam reads mip 0 - so an empty mip chain looks
+        // like working voxels and black GI. Stepping the level is how you tell them apart.
+        if (Input.IsKeyPressed(MipDownKey))
+        {
+            target.DebugMipmap = Math.Max(0, target.DebugMipmap - 1);
+            target.RefreshDebugView();
+        }
+
+        if (Input.IsKeyPressed(MipUpKey))
+        {
+            target.DebugMipmap++;
+            target.RefreshDebugView();
+        }
+
+        if (Input.IsKeyPressed(CycleOpacifyKey))
+            target.Opacify = target.Opacify switch { < 0.5f => 1f, < 1.5f => 2f, < 3f => 4f, _ => 0f };
+
         if (Input.IsKeyPressed(BounceDownKey))
             target.BounceIntensity = MathF.Max(0f, target.BounceIntensity - BounceStep);
 
         if (Input.IsKeyPressed(BounceUpKey))
             target.BounceIntensity += BounceStep;
 
+        if (Input.IsKeyPressed(ScreenshotKey) && (Input.IsKeyDown(Keys.LeftCtrl) || Input.IsKeyDown(Keys.RightCtrl)))
+            SaveScreenshot();
+
+        DrawOverlay(target);
+    }
+
+    private void DrawOverlay(VoxelGIVolume target)
+    {
         if (!ShowOverlay)
             return;
 
@@ -113,7 +177,53 @@ public class VoxelGIDebug : SyncScript
         Print($"[{CycleViewKey}] Voxel view    : {target.DebugView}");
         Print($"[{FreezeKey}] Voxelization  : {(target.Voxelize ? "live" : "frozen")}");
         Print($"[{CycleQualityKey}] Quality       : {target.Quality} ({target.Preset.Resolution}^3, {target.Preset.DiffuseCones} cones)");
-        Print($"[{BounceDownKey}/{BounceUpKey}] Bounce  : {target.BounceIntensity:0.00}");
+        Print($"[-/+ numpad] Bounce   : {target.BounceIntensity:0.00}");
+        Print($"[{CycleOpacifyKey}] Opacify       : {target.Opacify:0.0}");
+        Print($"[PgDn/PgUp] Raw mip    : {target.DebugMipmap}");
+        Print($"[Ctrl+{ScreenshotKey}] Screenshot  : {screenshotStatus}");
         Print($"    Volume        : {target.VolumeSize:0.#} units, voxel {target.VoxelSize:0.###}");
+    }
+
+    private string screenshotStatus = "ready";
+
+    /// <summary>
+    /// Writes the back buffer to a PNG. This is the frame the GPU last presented, so it carries the
+    /// overlay too - press the key with <see cref="ShowOverlay"/> off for a clean capture.
+    /// </summary>
+    private void SaveScreenshot()
+    {
+        try
+        {
+            var directory = Path.IsPathRooted(ScreenshotDirectory)
+                ? ScreenshotDirectory
+                : Path.Combine(AppContext.BaseDirectory, ScreenshotDirectory);
+            Directory.CreateDirectory(directory);
+
+            var path = Path.Combine(directory, $"voxelgi-{DateTime.Now:yyyyMMdd-HHmmss-fff}.png");
+
+            using var image = GraphicsDevice.Presenter.BackBuffer.GetDataAsImage(Game.GraphicsContext.CommandList);
+
+            // The back buffer's alpha is whatever the last pass happened to leave there, usually
+            // zero. PNG keeps it, so the capture opens as a near-transparent, washed-out image once
+            // a viewer composites it over white. Nothing on screen is translucent - force it opaque.
+            var pixels = image.PixelBuffer[0];
+            if (pixels.PixelSize == 4)
+            {
+                var bytes = pixels.GetPixels<byte>();
+                for (int i = 3; i < bytes.Length; i += 4)
+                    bytes[i] = byte.MaxValue;
+                pixels.SetPixels(bytes);
+            }
+
+            using (var stream = File.Create(path))
+                image.Save(stream, ImageFileType.Png);
+
+            screenshotStatus = Path.GetFileName(path);
+        }
+        catch (Exception e)
+        {
+            // A failed capture is not worth taking the demo down for; say so in the overlay.
+            screenshotStatus = $"failed - {e.Message}";
+        }
     }
 }

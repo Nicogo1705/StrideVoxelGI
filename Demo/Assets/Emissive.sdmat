@@ -22,7 +22,7 @@ Attributes:
         EmissiveMap: !ComputeColor
             Value: {R: 1.0, G: 0.93, B: 0.82, A: 1.0}
         Intensity: !ComputeFloat
-            Value: 12.0
+            Value: 2.5
         UseAlpha: false
     Overrides:
         UVScale: {X: 1.0, Y: 1.0}
