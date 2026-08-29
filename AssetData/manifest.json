@@ -3,7 +3,7 @@
   "id": "com.nicogo.voxel-gi",
   "name": "Stride Voxel GI (VXGI) Starter",
   "authors": [{ "name": "Nicogo", "url": "https://github.com/Nicogo1705" }],
-  "description": "Real-time global illumination in Stride in one component. Stride ships voxel cone tracing but nothing that turns it on: this wires the voxel volume, the GI light and a working graphics compositor together, adds four quality presets, and proves it with a Cornell box you can toggle the bounce light on and off in.",
+  "description": "Real-time global illumination in Stride in one component. Stride ships voxel cone tracing but nothing that turns it on: this wires the voxel volume, the GI light and a working compositor together, adds four quality presets, and a Cornell box to toggle the bounce in.",
   "category": "Examples",
   "tags": ["gi", "global-illumination", "vxgi", "voxel-cone-tracing", "lighting", "rendering", "demo", "cornell-box"],
   "license": "MIT",
