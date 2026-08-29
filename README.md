@@ -10,11 +10,12 @@ Real-time global illumination for [Stride](https://www.stride3d.net/), in one co
 > 1. `LightVoxelShader.sdsl` opens with a `using` declaration, which the compiler errored on
 >    outright. Fixed on the `fix-sdsl-using-namespace` branch of the Stride checkout (one case
 >    added to `SDSLC.cs`).
-> 2. Past that, the compiler throws `NotImplementedException` on **indexed shader compositions**
->    — `compose IVoxelSampler AttributeSamplers[]` then `AttributeSamplers[i].Sample(...)`
->    (`Expression.cs`, "array indexer for shader compositions"). Every marching, storage and
->    layout shader in `Stride.Voxels` is built on that pattern, so this one is a real compiler
->    feature, not a patch.
+> 2. Past that, the compiler throws `NotImplementedException` on **literal-indexed shader
+>    compositions** — `compose IVoxelSampler AttributeSamplers[]` then
+>    `AttributeSamplers[0].Sample(...)` (`Expression.cs:1286`, case "array indexer for shader
+>    compositions"). Composition *arrays* themselves work: the mixer expands
+>    `foreach (x in Foo)` (`ShaderMixer.cs:831`). It is only direct indexing that was never
+>    written. Every marching, storage and layout shader in `Stride.Voxels` indexes that way.
 >
 > Everything below is written and builds; it renders as soon as (2) lands upstream.
 
