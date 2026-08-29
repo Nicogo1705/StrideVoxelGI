@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <RootNamespace>StrideVoxelGI</RootNamespace>
+    <AssemblyName>StrideVoxelGI</AssemblyName>
+  </PropertyGroup>
+  <!--
+    Reusable wrapper around Stride's built-in voxel cone tracing (Stride.Voxels). No game content,
+    no shaders of its own: everything here configures engine types that already ship with Stride.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Stride.Engine" Version="4.4.0-beta5" />
+    <PackageReference Include="Stride.Voxels" Version="4.4.0-beta5" />
+    <PackageReference Include="Stride.AssetCompiler" Version="4.4.0-beta5" IncludeAssets="build;buildTransitive" />
+  </ItemGroup>
+</Project>

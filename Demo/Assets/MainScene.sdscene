@@ -1,0 +1,232 @@
+!SceneAsset
+Id: 5a1e0000-0000-4000-8000-000000000001
+SerializedVersion: {Stride: 3.1.0.1}
+Tags: []
+ChildrenIds: []
+Offset: {X: 0.0, Y: 0.0, Z: 0.0}
+Hierarchy:
+    RootParts:
+        - ref!! 5a1e0000-0000-4000-8000-000000000031
+        - ref!! 5a1e0000-0000-4000-8000-000000000034
+        - ref!! 5a1e0000-0000-4000-8000-000000000037
+        - ref!! 5a1e0000-0000-4000-8000-00000000003a
+        - ref!! 5a1e0000-0000-4000-8000-00000000003d
+        - ref!! 5a1e0000-0000-4000-8000-000000000040
+        - ref!! 5a1e0000-0000-4000-8000-000000000043
+        - ref!! 5a1e0000-0000-4000-8000-000000000046
+        - ref!! 5a1e0000-0000-4000-8000-000000000049
+        - ref!! 5a1e0000-0000-4000-8000-00000000004c
+        - ref!! 5a1e0000-0000-4000-8000-000000000050
+        - ref!! 5a1e0000-0000-4000-8000-000000000054
+    Parts:
+        -   Entity:
+                Id: 5a1e0000-0000-4000-8000-000000000031
+                Name: Floor
+                Components:
+                    15b07397e19642dda392a3cc79b278bb: !TransformComponent
+                        Id: 5a1e0000-0000-4000-8000-000000000032
+                        Position: {X: 0.0, Y: -0.25, Z: 0.0}
+                        Rotation: {X: 0.0, Y: 0.0, Z: 0.0, W: 1.0}
+                        Scale: {X: 10.5, Y: 0.5, Z: 10.5}
+                        Children: {}
+                    a84b29b613344e6f8f6faf766cc613b3: !ModelComponent
+                        Id: 5a1e0000-0000-4000-8000-000000000030
+                        Model: 5a1e0000-0000-4000-8000-000000000020:Cube White
+                        Materials: {}
+        -   Entity:
+                Id: 5a1e0000-0000-4000-8000-000000000034
+                Name: Ceiling
+                Components:
+                    71e6cc92896847ddbac2d0dbfef1b9c1: !TransformComponent
+                        Id: 5a1e0000-0000-4000-8000-000000000035
+                        Position: {X: 0.0, Y: 10.25, Z: 0.0}
+                        Rotation: {X: 0.0, Y: 0.0, Z: 0.0, W: 1.0}
+                        Scale: {X: 10.5, Y: 0.5, Z: 10.5}
+                        Children: {}
+                    bd729c67322e43cf8eb6451b43e60431: !ModelComponent
+                        Id: 5a1e0000-0000-4000-8000-000000000033
+                        Model: 5a1e0000-0000-4000-8000-000000000020:Cube White
+                        Materials: {}
+        -   Entity:
+                Id: 5a1e0000-0000-4000-8000-000000000037
+                Name: Back wall
+                Components:
+                    c24877dd9cfb4bbdb75184b4f2349575: !TransformComponent
+                        Id: 5a1e0000-0000-4000-8000-000000000038
+                        Position: {X: 0.0, Y: 5.0, Z: -5.25}
+                        Rotation: {X: 0.0, Y: 0.0, Z: 0.0, W: 1.0}
+                        Scale: {X: 10.5, Y: 10.5, Z: 0.5}
+                        Children: {}
+                    ab88eb6259a547d6a07910effadb7405: !ModelComponent
+                        Id: 5a1e0000-0000-4000-8000-000000000036
+                        Model: 5a1e0000-0000-4000-8000-000000000020:Cube White
+                        Materials: {}
+        -   Entity:
+                Id: 5a1e0000-0000-4000-8000-00000000003a
+                Name: Left wall (red)
+                Components:
+                    3d9225c1364b42979f15a856d13077b6: !TransformComponent
+                        Id: 5a1e0000-0000-4000-8000-00000000003b
+                        Position: {X: -5.25, Y: 5.0, Z: 0.0}
+                        Rotation: {X: 0.0, Y: 0.0, Z: 0.0, W: 1.0}
+                        Scale: {X: 0.5, Y: 10.5, Z: 10.5}
+                        Children: {}
+                    cc1ef7cd771b42d9b85c16f9b173a022: !ModelComponent
+                        Id: 5a1e0000-0000-4000-8000-000000000039
+                        Model: 5a1e0000-0000-4000-8000-000000000021:Cube Red
+                        Materials: {}
+        -   Entity:
+                Id: 5a1e0000-0000-4000-8000-00000000003d
+                Name: Right wall (green)
+                Components:
+                    ca821f6c60964a7d9c30898e4eed8c7e: !TransformComponent
+                        Id: 5a1e0000-0000-4000-8000-00000000003e
+                        Position: {X: 5.25, Y: 5.0, Z: 0.0}
+                        Rotation: {X: 0.0, Y: 0.0, Z: 0.0, W: 1.0}
+                        Scale: {X: 0.5, Y: 10.5, Z: 10.5}
+                        Children: {}
+                    d8e8dbd608f940e29a1bac18117fc787: !ModelComponent
+                        Id: 5a1e0000-0000-4000-8000-00000000003c
+                        Model: 5a1e0000-0000-4000-8000-000000000022:Cube Green
+                        Materials: {}
+        -   Entity:
+                Id: 5a1e0000-0000-4000-8000-000000000040
+                Name: Tall box
+                Components:
+                    7b648d8b43544f70b1aa2d3ca6c61cc0: !TransformComponent
+                        Id: 5a1e0000-0000-4000-8000-000000000041
+                        Position: {X: -1.6, Y: 3.0, Z: -1.3}
+                        Rotation: {X: 0.0, Y: 0.17364818, Z: 0.0, W: 0.98480775}
+                        Scale: {X: 2.6, Y: 6.0, Z: 2.6}
+                        Children: {}
+                    d09b5aa15bc041aaa21bac8208134ebe: !ModelComponent
+                        Id: 5a1e0000-0000-4000-8000-00000000003f
+                        Model: 5a1e0000-0000-4000-8000-000000000020:Cube White
+                        Materials: {}
+        -   Entity:
+                Id: 5a1e0000-0000-4000-8000-000000000043
+                Name: Short box
+                Components:
+                    6f0325f017b94329b8c55c9226f73b85: !TransformComponent
+                        Id: 5a1e0000-0000-4000-8000-000000000044
+                        Position: {X: 1.7, Y: 1.3, Z: 1.4}
+                        Rotation: {X: 0.0, Y: -0.17364818, Z: 0.0, W: 0.98480775}
+                        Scale: {X: 2.6, Y: 2.6, Z: 2.6}
+                        Children: {}
+                    560f0b998097443f86c7e0d2d53fae5e: !ModelComponent
+                        Id: 5a1e0000-0000-4000-8000-000000000042
+                        Model: 5a1e0000-0000-4000-8000-000000000020:Cube White
+                        Materials: {}
+        -   Entity:
+                Id: 5a1e0000-0000-4000-8000-000000000046
+                Name: Chrome sphere
+                Components:
+                    6fe849af5ca04315b71460fda3bbc1b9: !TransformComponent
+                        Id: 5a1e0000-0000-4000-8000-000000000047
+                        Position: {X: 1.7, Y: 3.4, Z: 1.4}
+                        Rotation: {X: 0.0, Y: 0.0, Z: 0.0, W: 1.0}
+                        Scale: {X: 1.6, Y: 1.6, Z: 1.6}
+                        Children: {}
+                    7916d3e0231f4039ae0528df76acb142: !ModelComponent
+                        Id: 5a1e0000-0000-4000-8000-000000000045
+                        Model: 5a1e0000-0000-4000-8000-000000000024:Sphere
+                        Materials: {}
+        -   Entity:
+                Id: 5a1e0000-0000-4000-8000-000000000049
+                Name: Light panel
+                Components:
+                    99c03034ca044f4d8b26252a8c658136: !TransformComponent
+                        Id: 5a1e0000-0000-4000-8000-00000000004a
+                        Position: {X: 0.0, Y: 9.72, Z: 0.0}
+                        Rotation: {X: 0.0, Y: 0.0, Z: 0.0, W: 1.0}
+                        Scale: {X: 3.2, Y: 0.15, Z: 3.2}
+                        Children: {}
+                    de97f3b1bec64681a0381dcabc0a2db6: !ModelComponent
+                        Id: 5a1e0000-0000-4000-8000-000000000048
+                        Model: 5a1e0000-0000-4000-8000-000000000023:Cube Emissive
+                        Materials: {}
+        -   Entity:
+                Id: 5a1e0000-0000-4000-8000-00000000004c
+                Name: Ceiling light
+                Components:
+                    205dcaa522354dec9b71580cc3a5bcee: !TransformComponent
+                        Id: 5a1e0000-0000-4000-8000-00000000004d
+                        Position: {X: 0.0, Y: 9.6, Z: 0.0}
+                        Rotation: {X: -0.70710678, Y: 0.0, Z: 0.0, W: 0.70710678}
+                        Scale: {X: 1.0, Y: 1.0, Z: 1.0}
+                        Children: {}
+                    c3024dcfa32d4797b54dd325d18a1722: !LightComponent
+                        Id: 5a1e0000-0000-4000-8000-00000000004b
+                        Type: !LightSpot
+                            Color: !ColorRgbProvider
+                                Value: {R: 1.0, G: 0.95, B: 0.87}
+                            Shadow: !LightStandardShadowMap
+                                Enabled: true
+                                Filter: !LightShadowMapFilterTypePcf
+                                    FilterSize: Filter5x5
+                                Size: Large
+                                BiasParameters:
+                                    DepthBias: 0.005
+                            Range: 24.0
+                            AngleInner: 70.0
+                            AngleOuter: 95.0
+                        Intensity: 220.0
+        -   Entity:
+                Id: 5a1e0000-0000-4000-8000-000000000050
+                Name: Camera
+                Components:
+                    8aac99bf93ef4e52a879c88c0942212d: !TransformComponent
+                        Id: 5a1e0000-0000-4000-8000-000000000051
+                        Position: {X: 0.0, Y: 5.0, Z: 16.5}
+                        Rotation: {X: 0.0, Y: 0.0, Z: 0.0, W: 1.0}
+                        Scale: {X: 1.0, Y: 1.0, Z: 1.0}
+                        Children: {}
+                    ab34c2711b3640f8b896e19e51cd344a: !CameraComponent
+                        Id: 5a1e0000-0000-4000-8000-00000000004e
+                        Name: null
+                        Projection: Perspective
+                        VerticalFieldOfView: 50.0
+                        NearClipPlane: 0.1
+                        FarClipPlane: 200.0
+                        Slot: 70b93448-3dd3-4693-958c-690ba196761a
+                    f519852d8a3d4450873901ab85b64239: !Demo.BasicCameraController,Demo
+                        Id: 5a1e0000-0000-4000-8000-00000000004f
+                        Gamepad: false
+                        KeyboardMovementSpeed: {X: 6.0, Y: 6.0, Z: 6.0}
+                        TouchMovementSpeed: {X: 0.7, Y: 0.7, Z: 0.3}
+                        SpeedFactor: 3.0
+                        KeyboardRotationSpeed: {X: 3.0, Y: 3.0}
+                        MouseRotationSpeed: {X: 1.0, Y: 1.0}
+                        TouchRotationSpeed: {X: 1.0, Y: 0.7}
+        -   Entity:
+                Id: 5a1e0000-0000-4000-8000-000000000054
+                Name: Voxel GI
+                Components:
+                    5f24ce9a5c494efb966e5b7f7eeb3c4a: !TransformComponent
+                        Id: 5a1e0000-0000-4000-8000-000000000055
+                        Position: {X: 0.0, Y: 5.0, Z: 0.0}
+                        Rotation: {X: 0.0, Y: 0.0, Z: 0.0, W: 1.0}
+                        Scale: {X: 1.0, Y: 1.0, Z: 1.0}
+                        Children: {}
+                    e053f097e9f94e658186cdee0dc3e6e4: !StrideVoxelGI.VoxelGIVolume,StrideVoxelGI
+                        Id: 5a1e0000-0000-4000-8000-000000000052
+                        VolumeSize: 26.0
+                        Quality: Medium
+                        BounceIntensity: 1.25
+                        SpecularIntensity: 1.0
+                        GIEnabled: true
+                        Voxelize: true
+                        DebugView: Off
+                        DebugMipmap: 0
+                    541322b981a3480b9d9a2ab36f4948c6: !StrideVoxelGI.VoxelGIDebug,StrideVoxelGI
+                        Id: 5a1e0000-0000-4000-8000-000000000053
+                        Target: null
+                        ShowOverlay: true
+                        OverlayPosition: {X: 16, Y: 16}
+                        ToggleGIKey: G
+                        CycleViewKey: V
+                        FreezeKey: F
+                        CycleQualityKey: Q
+                        BounceDownKey: OemOpenBrackets
+                        BounceUpKey: OemCloseBrackets
+                        BounceStep: 0.25
