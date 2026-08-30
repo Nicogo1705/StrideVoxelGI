@@ -319,7 +319,7 @@ public class VoxelGIVolume : SyncScript
 
         Volume = new VoxelVolumeComponent
         {
-            VoxelizationMethod = new VoxelizationMethodDominantAxis(),
+            VoxelizationMethod = new VoxelizationMethodDominantAxis { MultisampleCount = Preset.VoxelizationMSAA },
             Storage = Preset.CreateStorage(),
             VoxelGridSnapping = true,
         };
@@ -376,6 +376,7 @@ public class VoxelGIVolume : SyncScript
         {
             voxelLight.BounceIntensityScale = secondBounce;
             voxelLight.SpecularIntensityScale = specularIntensity;
+            voxelLight.SpecularRoughnessCutoff = Preset.SpecularRoughnessCutoff;
         }
 
         // Any settings change can affect what the voxels hold (intensity feeds the second-bounce

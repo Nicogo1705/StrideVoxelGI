@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Nicogo. Distributed under the MIT license.
 using Stride.Core;
+using Stride.Graphics;
 using Stride.Rendering.Voxels;
 
 namespace StrideVoxelGI;
@@ -61,6 +62,20 @@ public sealed class VoxelGIPreset
     /// </summary>
     public bool UpdateAllClipmapsEveryFrame;
 
+    /// <summary>
+    /// Multisampling of the voxelization render target. More samples = fewer holes in thin
+    /// geometry (each covered sample writes a fragment), at proportional fill cost during
+    /// voxelization. Opacify already compensates partial coverage, so the low tiers get by
+    /// with less.
+    /// </summary>
+    public MultisampleCount VoxelizationMSAA = MultisampleCount.X8;
+
+    /// <summary>
+    /// Roughness above which the specular cone (the most expensive trace) is skipped - rough
+    /// surfaces get a blur the diffuse cones already provide. 1 traces everything.
+    /// </summary>
+    public float SpecularRoughnessCutoff = 1.0f;
+
     public static VoxelGIPreset For(VoxelGIQuality quality) => quality switch
     {
         VoxelGIQuality.Low => new VoxelGIPreset
@@ -70,6 +85,8 @@ public sealed class VoxelGIPreset
             DiffuseCones = 6,
             DiffuseSteps = 5,
             SpecularSteps = 16,
+            VoxelizationMSAA = MultisampleCount.X2,
+            SpecularRoughnessCutoff = 0.7f,
         },
         VoxelGIQuality.High => new VoxelGIPreset
         {
@@ -87,6 +104,11 @@ public sealed class VoxelGIPreset
             DiffuseSteps = 12,
             SpecularSteps = 60,
             SpecularConeRatio = 0.6f,
+        },
+        VoxelGIQuality.Medium => new VoxelGIPreset
+        {
+            VoxelizationMSAA = MultisampleCount.X4,
+            SpecularRoughnessCutoff = 0.9f,
         },
         _ => new VoxelGIPreset(),
     };
