@@ -6,6 +6,7 @@ using Stride.Core.Mathematics;
 using Stride.Engine;
 using Stride.Graphics;
 using Stride.Input;
+using Stride.Profiling;
 
 namespace StrideVoxelGI;
 
@@ -72,6 +73,14 @@ public class VoxelGIDebug : SyncScript
     /// <summary>Saves a PNG of the frame next to the executable. Hold Ctrl.</summary>
     [DataMember(96)]
     public Keys ScreenshotKey { get; set; } = Keys.S;
+
+    /// <summary>
+    /// Cycles Stride's built-in profiler: off, FPS, CPU events, GPU events. The GPU page is the
+    /// one that tells you what the voxel passes actually cost on this machine - guesswork about an
+    /// optimization is worth less than one glance at it.
+    /// </summary>
+    [DataMember(94)]
+    public Keys CycleProfilerKey { get; set; } = Keys.P;
 
     /// <summary>Where screenshots go. Relative paths resolve next to the executable.</summary>
     [DataMember(97)]
@@ -158,7 +167,38 @@ public class VoxelGIDebug : SyncScript
         if (Input.IsKeyPressed(ScreenshotKey) && (Input.IsKeyDown(Keys.LeftCtrl) || Input.IsKeyDown(Keys.RightCtrl)))
             SaveScreenshot();
 
+        if (Input.IsKeyPressed(CycleProfilerKey))
+            CycleProfiler();
+
         DrawOverlay(target);
+    }
+
+    private enum ProfilerPage { Off, Fps, Cpu, Gpu }
+    private ProfilerPage profilerPage = ProfilerPage.Off;
+
+    private void CycleProfiler()
+    {
+        profilerPage = profilerPage switch
+        {
+            ProfilerPage.Off => ProfilerPage.Fps,
+            ProfilerPage.Fps => ProfilerPage.Cpu,
+            ProfilerPage.Cpu => ProfilerPage.Gpu,
+            _ => ProfilerPage.Off,
+        };
+
+        if (profilerPage == ProfilerPage.Off)
+        {
+            GameProfiler.DisableProfiling();
+            return;
+        }
+
+        GameProfiler.EnableProfiling();
+        GameProfiler.FilteringMode = profilerPage switch
+        {
+            ProfilerPage.Cpu => GameProfilingResults.CpuEvents,
+            ProfilerPage.Gpu => GameProfilingResults.GpuEvents,
+            _ => GameProfilingResults.Fps,
+        };
     }
 
     private void DrawOverlay(VoxelGIVolume target)
@@ -181,6 +221,7 @@ public class VoxelGIDebug : SyncScript
         Print($"[{CycleOpacifyKey}] Opacify       : {target.Opacify:0.0}");
         Print($"[PgDn/PgUp] Raw mip    : {target.DebugMipmap}");
         Print($"[Ctrl+{ScreenshotKey}] Screenshot  : {screenshotStatus}");
+        Print($"[{CycleProfilerKey}] Profiler      : {profilerPage}");
         Print($"    Volume        : {target.VolumeSize:0.#} units, voxel {target.VoxelSize:0.###}, {target.EffectiveClipMapLevels}/{target.ClipMapLevels} clip level(s){(target.IsFrozen ? ", frozen" : "")}");
     }
 
