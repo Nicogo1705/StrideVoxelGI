@@ -10,8 +10,8 @@
     no shaders of its own: everything here configures engine types that already ship with Stride.
   -->
   <ItemGroup>
-    <PackageReference Include="Stride.Engine" Version="4.4.0-beta5" />
-    <PackageReference Include="Stride.Voxels" Version="4.4.0-beta5" />
-    <PackageReference Include="Stride.AssetCompiler" Version="4.4.0-beta5" IncludeAssets="build;buildTransitive" />
+    <PackageReference Include="Stride.Engine" Version="$(StrideVersion)" />
+    <PackageReference Include="Stride.Voxels" Version="$(StrideVersion)" />
+    <PackageReference Include="Stride.AssetCompiler" Version="$(StrideVersion)" IncludeAssets="build;buildTransitive" />
   </ItemGroup>
 </Project>

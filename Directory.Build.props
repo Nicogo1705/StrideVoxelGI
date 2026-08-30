@@ -1,0 +1,13 @@
+<Project>
+  <PropertyGroup>
+    <!-- Stride version every project references. Defaults to the published packages. -->
+    <StrideVersion>4.4.0-beta5</StrideVersion>
+
+    <!-- Building the Stride fork auto-packs its packages into this local feed (see
+         docs/build/versioning.md in the stride repo). When that build exists, use it -
+         that is how the demo runs against engine changes before they ship on nuget.org.
+         NuGet.config registers the feed. Opt out for one build with -p:StrideUseDevPackages=false. -->
+    <StrideDevFeed>$(LOCALAPPDATA)\stride\nugetdev</StrideDevFeed>
+    <StrideVersion Condition="'$(StrideUseDevPackages)' != 'false' and Exists('$(StrideDevFeed)\Stride.Engine.4.4.0-dev.nupkg')">4.4.0-dev</StrideVersion>
+  </PropertyGroup>
+</Project>
