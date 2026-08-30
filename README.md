@@ -51,6 +51,9 @@ Entity.Scene.Entities.Add(gi);
 | `O` | Cycle the voxelization thickening: 0, 1, 2, 4. |
 | `PgDn` `PgUp` | Step the mip level shown by the raw view. |
 | numpad `-` `+` | Lower / raise the bounce intensity. |
+| `R` | Cycle the GI resolution: 1/1, 1/2, 1/4 of the screen. |
+| `P` | Cycle Stride's profiler: off / FPS / CPU events / GPU events. The GPU page is what the voxel passes actually cost. |
+| `N` | Next profiler result page (`Shift`+`N` goes back to the first). |
 | `Ctrl`+`S` | Save a PNG of the frame to `Screenshots/`. |
 | right-drag, `WASD`/`ZQSD` | Fly the camera. The keyboard only moves it while the right button is held, so the letter keys above stay free the rest of the time. `C` and `E`/`Space` go down and up, `Shift` goes faster. |
 
@@ -59,15 +62,26 @@ Entity.Scene.Entities.Add(gi);
 - **`VolumeSize`** — the voxelized cube is centred on the entity and is *all* the GI knows about.
   Geometry outside it does not bounce light. Parent the entity to your camera or player for an
   open world; leave it fixed for a room.
-- **`Quality`** — picks clipmap resolution (64³ → 256³), voxel layout and cone count together.
-  `VoxelSize` (shown in the debug overlay) is `VolumeSize / resolution`: a 26-unit volume at
-  Medium gives ~20 cm voxels. That number, not the preset name, is what decides whether a
-  doorframe survives voxelization.
+- **`Quality`** — picks clipmap resolution, voxel layout and cone count together. `VoxelSize`
+  (shown in the debug overlay) is `VolumeSize / 2^(ClipMapLevels-1) / resolution` — the rings
+  matter as much as the resolution. That number, not the preset name, is what decides whether a
+  doorframe survives voxelization, so read it off the overlay rather than assuming.
+- **`ClipMapLevels`** — nested detail rings, each covering twice the distance of the last. This is
+  the cheap way to finer voxels: memory grows linearly with rings and cubically with resolution,
+  so eight rings at 128³ resolve eight times finer than five for a fraction of what 256³ costs.
+  The ceiling is `MaxClipMapLevels` (twelve at 128³, eight at 256³), set by how much of a 3D
+  texture Direct3D11 will allocate.
+- **`GIResolutionDivisor`** — trace the diffuse cones into a buffer 1/N of the screen and read it
+  back when shading, instead of tracing per shaded pixel. 2 costs a quarter of the cones, 4 a
+  sixteenth, for softer silhouettes. Needs a depth-only stage on the compositor; without one the
+  light quietly keeps marching inline.
 - **`BounceIntensity`** — Stride's own `LightVoxel.BounceIntensityScale` defaults to **0**, which
   is why a hand-built voxel GI setup renders exactly nothing. Here it defaults to 1.
-- **Anisotropic layout** (High and above) — stores six directional values per voxel instead of
-  one. Six times the memory, but a surface stops receiving light that reached the voxel from
-  behind it, which is what most "light leaks through my wall" reports actually are.
+- **Directional storage** (`Directionality`, paired on High and above) — stores three directional
+  values per voxel instead of one, the two facings of each axis packed together. Three times the
+  memory, but a surface stops receiving light that reached the voxel from behind it, which is what
+  most "light leaks through my wall" reports actually are. Full six-way anisotropy is there too,
+  at twice the cost of paired for a difference you have to look for.
 - **`Voxelize`** — turn it off for static levels. The cones keep tracing the last capture and the
   voxelization pass costs nothing.
 
@@ -101,14 +115,33 @@ package — the demo carries its own flattened copy so the asset works even if t
 
 ## The demo
 
-`Demo/` is a Cornell box: red wall, green wall, two boxes, a chrome sphere and a spotlight
-pointing at an emissive ceiling panel. With GI off it is flat and the shadows are black. With GI
-on, the red and green walls bleed onto the white boxes, the ceiling lights up from bounce alone,
-and the sphere reflects the room through the specular cone.
+`Demo/` is a Cornell box: red wall, green wall, two boxes, a chrome sphere, three glass spheres
+and a spotlight pointing at an emissive ceiling panel. With GI off it is flat and the shadows are
+black. With GI on, the red and green walls bleed onto the white boxes, the ceiling lights up from
+bounce alone, and the spheres pick the room up through the specular cone.
 
 ```
 dotnet run --project Demo
 ```
+
+It also runs itself, which is how the screenshots and the timings in this repo were made:
+synthesized key presses do not reach Stride's input, so anything driving the demo from outside
+needs a way in that is not the keyboard.
+
+```
+Demo.exe --capture --profiler=gpu --quality=ultra
+```
+
+| Option | Does |
+|--------|------|
+| `--capture` | Walk the camera through five viewpoints, save a PNG at each, then exit. |
+| `--profiler=gpu\|cpu\|fps` | Open Stride's profiler at startup, so the shots carry the timings. |
+| `--quality=low\|medium\|high\|ultra`, `--divisor=N`, `--levels=N`, `--volume=N` | Override the volume's settings before capturing. |
+| `--quality-cycle` | Hold the camera still and switch tier at each stop, to compare presets. |
+| `--dump-gi` | Also save what the reduced-resolution GI pass wrote — the first place to look when the image has artefacts the full-rate path does not. |
+| `--no-gi`, `--view=cones\|raw` | Capture with the bounce off, or through a voxel debug view. |
+| `--rdc` | Ask RenderDoc to capture the frame each stop is shot on, when launched through `renderdoccmd`. |
+| `--shots=N`, `--settle=N`, `--warmup=N`, `--out=DIR`, `--pivot=N` | Shape the run: stops, hold per stop, seconds to let the engine compile before the first shot, where the PNGs go. |
 
 ## Credits
 
