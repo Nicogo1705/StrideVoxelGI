@@ -11,6 +11,24 @@ using Stride.Profiling;
 namespace StrideVoxelGI;
 
 /// <summary>
+/// A page of Stride's built-in profiler, as cycled by <see cref="VoxelGIDebug.CycleProfilerKey"/>.
+/// </summary>
+public enum VoxelGIProfilerPage
+{
+    /// <summary>The profiler is off and the debug overlay has the corner to itself.</summary>
+    Off,
+
+    /// <summary>Frame rate only.</summary>
+    Fps,
+
+    /// <summary>CPU events.</summary>
+    Cpu,
+
+    /// <summary>GPU events - what the voxel passes actually cost on this machine.</summary>
+    Gpu,
+}
+
+/// <summary>
 /// Hotkeys and an on-screen readout for a <see cref="VoxelGIVolume"/>. Drop it next to the volume
 /// (or point <see cref="Target"/> at one) to get the before/after toggle, the voxel views and the
 /// quality tiers without opening the property grid.
@@ -85,6 +103,10 @@ public class VoxelGIDebug : SyncScript
     /// <summary>Next profiler result page, when the list does not fit on one.</summary>
     [DataMember(95)]
     public Keys ProfilerPageKey { get; set; } = Keys.N;
+
+    /// <summary>Cycles the GI resolution divisor: 1, 2, 4.</summary>
+    [DataMember(99)]
+    public Keys CycleGIResolutionKey { get; set; } = Keys.R;
 
     /// <summary>Where screenshots go. Relative paths resolve next to the executable.</summary>
     [DataMember(97)]
@@ -171,11 +193,19 @@ public class VoxelGIDebug : SyncScript
         if (Input.IsKeyPressed(ScreenshotKey) && (Input.IsKeyDown(Keys.LeftCtrl) || Input.IsKeyDown(Keys.RightCtrl)))
             SaveScreenshot();
 
+        if (Input.IsKeyPressed(CycleGIResolutionKey))
+            target.GIResolutionDivisor = target.EffectiveGIResolutionDivisor switch
+            {
+                1 => 2,
+                2 => 4,
+                _ => 1,
+            };
+
         if (Input.IsKeyPressed(CycleProfilerKey))
             CycleProfiler();
 
         // Shift+N goes back to the first page; the engine clamps to the last one on its own.
-        if (profilerPage != ProfilerPage.Off && Input.IsKeyPressed(ProfilerPageKey))
+        if (profilerPage != VoxelGIProfilerPage.Off && Input.IsKeyPressed(ProfilerPageKey))
             GameProfiler.CurrentResultPage = Input.IsKeyDown(Keys.LeftShift) || Input.IsKeyDown(Keys.RightShift)
                 ? 1
                 : GameProfiler.CurrentResultPage + 1;
@@ -183,20 +213,38 @@ public class VoxelGIDebug : SyncScript
         DrawOverlay(target);
     }
 
-    private enum ProfilerPage { Off, Fps, Cpu, Gpu }
-    private ProfilerPage profilerPage = ProfilerPage.Off;
+    /// <summary>
+    /// The profiler page on screen. Assigning it opens or closes the profiler exactly as the
+    /// hotkey does - which is the only way in for anything driving the demo from outside, since
+    /// synthesized key presses do not reach Stride's input.
+    /// </summary>
+    [DataMemberIgnore]
+    public VoxelGIProfilerPage ProfilerPage
+    {
+        get => profilerPage;
+        set
+        {
+            profilerPage = value;
+            ApplyProfilerPage();
+        }
+    }
+
+    private VoxelGIProfilerPage profilerPage = VoxelGIProfilerPage.Off;
 
     private void CycleProfiler()
     {
-        profilerPage = profilerPage switch
+        ProfilerPage = profilerPage switch
         {
-            ProfilerPage.Off => ProfilerPage.Fps,
-            ProfilerPage.Fps => ProfilerPage.Cpu,
-            ProfilerPage.Cpu => ProfilerPage.Gpu,
-            _ => ProfilerPage.Off,
+            VoxelGIProfilerPage.Off => VoxelGIProfilerPage.Fps,
+            VoxelGIProfilerPage.Fps => VoxelGIProfilerPage.Cpu,
+            VoxelGIProfilerPage.Cpu => VoxelGIProfilerPage.Gpu,
+            _ => VoxelGIProfilerPage.Off,
         };
+    }
 
-        if (profilerPage == ProfilerPage.Off)
+    private void ApplyProfilerPage()
+    {
+        if (profilerPage == VoxelGIProfilerPage.Off)
         {
             GameProfiler.DisableProfiling();
             return;
@@ -206,8 +254,8 @@ public class VoxelGIDebug : SyncScript
         GameProfiler.CurrentResultPage = 1;
         GameProfiler.FilteringMode = profilerPage switch
         {
-            ProfilerPage.Cpu => GameProfilingResults.CpuEvents,
-            ProfilerPage.Gpu => GameProfilingResults.GpuEvents,
+            VoxelGIProfilerPage.Cpu => GameProfilingResults.CpuEvents,
+            VoxelGIProfilerPage.Gpu => GameProfilingResults.GpuEvents,
             _ => GameProfilingResults.Fps,
         };
     }
@@ -219,7 +267,7 @@ public class VoxelGIDebug : SyncScript
 
         // The profiler draws its report in the same corner; two overlapping walls of text help
         // no one. While it is up, yield the screen - P still cycles it, N pages through it.
-        if (profilerPage != ProfilerPage.Off)
+        if (profilerPage != VoxelGIProfilerPage.Off)
             return;
 
         var line = OverlayPosition;
@@ -237,17 +285,24 @@ public class VoxelGIDebug : SyncScript
         Print($"[{CycleOpacifyKey}] Opacify       : {target.Opacify:0.0}");
         Print($"[PgDn/PgUp] Raw mip    : {target.DebugMipmap}");
         Print($"[Ctrl+{ScreenshotKey}] Screenshot  : {screenshotStatus}");
+        Print($"[{CycleGIResolutionKey}] GI resolution : 1/{target.EffectiveGIResolutionDivisor} of the screen");
         Print($"[{CycleProfilerKey}] Profiler      : {profilerPage}");
         Print($"    Volume        : {target.VolumeSize:0.#} units, voxel {target.VoxelSize:0.###}, {target.EffectiveClipMapLevels}/{target.ClipMapLevels} clip level(s){(target.IsFrozen ? ", frozen" : "")}");
     }
 
     private string screenshotStatus = "ready";
 
+    private void SaveScreenshot() => CaptureScreenshot();
+
     /// <summary>
-    /// Writes the back buffer to a PNG. This is the frame the GPU last presented, so it carries the
-    /// overlay too - press the key with <see cref="ShowOverlay"/> off for a clean capture.
+    /// Writes the back buffer to a PNG and returns the path, or null if it could not be written.
+    /// This is the frame the GPU last presented, so it carries the overlay too - capture with
+    /// <see cref="ShowOverlay"/> off for a clean image.
     /// </summary>
-    private void SaveScreenshot()
+    /// <param name="fileName">
+    /// Name of the file inside <see cref="ScreenshotDirectory"/>. Defaults to a timestamp.
+    /// </param>
+    public string? CaptureScreenshot(string? fileName = null)
     {
         try
         {
@@ -256,7 +311,7 @@ public class VoxelGIDebug : SyncScript
                 : Path.Combine(AppContext.BaseDirectory, ScreenshotDirectory);
             Directory.CreateDirectory(directory);
 
-            var path = Path.Combine(directory, $"voxelgi-{DateTime.Now:yyyyMMdd-HHmmss-fff}.png");
+            var path = Path.Combine(directory, fileName ?? $"voxelgi-{DateTime.Now:yyyyMMdd-HHmmss-fff}.png");
 
             using var image = GraphicsDevice.Presenter.BackBuffer.GetDataAsImage(Game.GraphicsContext.CommandList);
 
@@ -276,11 +331,13 @@ public class VoxelGIDebug : SyncScript
                 image.Save(stream, ImageFileType.Png);
 
             screenshotStatus = Path.GetFileName(path);
+            return path;
         }
         catch (Exception e)
         {
             // A failed capture is not worth taking the demo down for; say so in the overlay.
             screenshotStatus = $"failed - {e.Message}";
+            return null;
         }
     }
 }

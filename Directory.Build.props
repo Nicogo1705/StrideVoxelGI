@@ -6,7 +6,11 @@
     <!-- Building the Stride fork auto-packs its packages into this local feed (see
          docs/build/versioning.md in the stride repo). When that build exists, use it -
          that is how the demo runs against engine changes before they ship on nuget.org.
-         NuGet.config registers the feed. Opt out for one build with -p:StrideUseDevPackages=false. -->
+         NuGet.config registers the feed. Opt out for one build with -p:StrideUseDevPackages=false.
+
+         The -dev suffix comes from the checkout's token in %LocalAppData%\stride\worktree-ids.txt
+         (first checkout = "dev"). A checkout registered as "(empty)" packs a bare 4.4.0 instead,
+         which this does not pick up - and which shadows the real release in the global NuGet cache. -->
     <StrideDevFeed>$(LOCALAPPDATA)\stride\nugetdev</StrideDevFeed>
     <StrideVersion Condition="'$(StrideUseDevPackages)' != 'false' and Exists('$(StrideDevFeed)\Stride.Engine.4.4.0-dev.nupkg')">4.4.0-dev</StrideVersion>
   </PropertyGroup>
