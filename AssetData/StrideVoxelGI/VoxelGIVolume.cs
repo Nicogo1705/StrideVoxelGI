@@ -167,6 +167,36 @@ public class VoxelGIVolume : SyncScript
         set { voxelize = value; Apply(); }
     }
 
+    /// <summary>
+    /// Voxelize only when something changed: after a rebuild or settings change, and whenever the
+    /// volume has moved by at least one voxel (each burst runs one round of clipmap levels). A
+    /// static scene watched by a moving camera then costs nothing in voxelization. The wrapper
+    /// cannot see scene edits, so a game that moves geometry or lights inside the volume calls
+    /// <see cref="MarkDirty"/> when it does - or leaves this off.
+    /// </summary>
+    [DataMember(65)]
+    public bool AutoFreeze
+    {
+        get => autoFreeze;
+        set
+        {
+            autoFreeze = value;
+            // Coming out of auto mode, hand Voxelize back to its own knob.
+            if (!value)
+                Apply();
+        }
+    }
+
+    /// <summary>
+    /// Tells an <see cref="AutoFreeze"/> volume that its content changed: geometry moved, a light
+    /// changed, a door opened. Schedules one full round of clipmap re-voxelization.
+    /// </summary>
+    public void MarkDirty() => voxelizeFramesLeft = EffectiveClipMapLevels + 1;
+
+    /// <summary>Whether <see cref="AutoFreeze"/> is currently holding voxelization off.</summary>
+    [DataMemberIgnore]
+    public bool IsFrozen => autoFreeze && voxelizeFramesLeft <= 0;
+
     /// <summary>Replace the frame with a view of the voxels themselves. See <see cref="VoxelGIDebugView"/>.</summary>
     [DataMember(70)]
     [Display(category: "Debug")]
@@ -215,6 +245,10 @@ public class VoxelGIVolume : SyncScript
     [DataMemberIgnore]
     public float VoxelSize => Preset.VoxelSizeFor(volumeSize / (1 << (EffectiveClipMapLevels - 1)));
 
+    private bool autoFreeze;
+    private Int3 lastSnappedPosition;
+    private int voxelizeFramesLeft;
+
     private Entity? lightEntity;
 
     public override void Start()
@@ -224,13 +258,29 @@ public class VoxelGIVolume : SyncScript
 
     public override void Update()
     {
-        if (Follow == null)
-            return;
-
         // World position, so a camera nested under another entity is followed correctly. The
         // volume entity is expected to be a scene root; if it were itself nested, the parent's
         // transform would double up here.
-        Entity.Transform.Position = Follow.WorldMatrix.TranslationVector;
+        if (Follow != null)
+            Entity.Transform.Position = Follow.WorldMatrix.TranslationVector;
+
+        if (!autoFreeze || Volume == null)
+            return;
+
+        // One-voxel granularity: VoxelGridSnapping quantizes the voxelized volume to whole
+        // voxels, so a sub-voxel move re-voxelizes to the exact same content - only an actual
+        // grid crossing is a change worth waking up for.
+        var gridPosition = Entity.Transform.Position / VoxelSize;
+        var snapped = new Int3((int)MathF.Floor(gridPosition.X), (int)MathF.Floor(gridPosition.Y), (int)MathF.Floor(gridPosition.Z));
+        if (snapped != lastSnappedPosition)
+        {
+            lastSnappedPosition = snapped;
+            MarkDirty();
+        }
+
+        Volume.Voxelize = voxelize && voxelizeFramesLeft > 0;
+        if (voxelizeFramesLeft > 0)
+            voxelizeFramesLeft--;
     }
 
     public override void Cancel()
@@ -327,6 +377,10 @@ public class VoxelGIVolume : SyncScript
             voxelLight.BounceIntensityScale = secondBounce;
             voxelLight.SpecularIntensityScale = specularIntensity;
         }
+
+        // Any settings change can affect what the voxels hold (intensity feeds the second-bounce
+        // re-injection during voxelization), so an AutoFreeze volume wakes up for one round.
+        MarkDirty();
     }
 
     private IVoxelVisualization? CreateVisualization() => debugView switch

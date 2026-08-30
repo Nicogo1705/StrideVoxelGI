@@ -413,6 +413,7 @@ Hierarchy:
                         SpecularIntensity: 1.0
                         GIEnabled: true
                         Voxelize: true
+                        AutoFreeze: true
                         DebugView: Off
                         DebugMipmap: 0
                     541322b981a3480b9d9a2ab36f4948c6: !StrideVoxelGI.VoxelGIDebug,StrideVoxelGI
