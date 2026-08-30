@@ -21,6 +21,16 @@ Hierarchy:
         - ref!! 5a1e0000-0000-4000-8000-000000000062
         - ref!! 5a1e0000-0000-4000-8000-000000000072
         - ref!! 5a1e0000-0000-4000-8000-000000000077
+        - ref!! 5a1e0000-0000-4000-8000-000000000080
+        - ref!! 5a1e0000-0000-4000-8000-000000000083
+        - ref!! 5a1e0000-0000-4000-8000-000000000086
+        - ref!! 5a1e0000-0000-4000-8000-000000000089
+        - ref!! 5a1e0000-0000-4000-8000-00000000008c
+        - ref!! 5a1e0000-0000-4000-8000-00000000008f
+        - ref!! 5a1e0000-0000-4000-8000-000000000092
+        - ref!! 5a1e0000-0000-4000-8000-000000000095
+        - ref!! 5a1e0000-0000-4000-8000-000000000098
+        - ref!! 5a1e0000-0000-4000-8000-00000000009b
     Parts:
         -   Entity:
                 Id: 5a1e0000-0000-4000-8000-000000000031
@@ -52,13 +62,13 @@ Hierarchy:
                         Materials: {}
         -   Entity:
                 Id: 5a1e0000-0000-4000-8000-000000000037
-                Name: Back wall
+                Name: Back wall (left of door)
                 Components:
                     c24877dd9cfb4bbdb75184b4f2349575: !TransformComponent
                         Id: 5a1e0000-0000-4000-8000-000000000038
-                        Position: {X: 0.0, Y: 5.0, Z: -5.25}
+                        Position: {X: -3.375, Y: 5.0, Z: -5.25}
                         Rotation: {X: 0.0, Y: 0.0, Z: 0.0, W: 1.0}
-                        Scale: {X: 10.5, Y: 10.5, Z: 0.5}
+                        Scale: {X: 3.75, Y: 10.5, Z: 0.5}
                         Children: {}
                     ab88eb6259a547d6a07910effadb7405: !ModelComponent
                         Id: 5a1e0000-0000-4000-8000-000000000036
@@ -244,6 +254,146 @@ Hierarchy:
                         Model: 5a1e0000-0000-4000-8000-000000000076:Sphere Tinted
                         Materials: {}
         -   Entity:
+                Id: 5a1e0000-0000-4000-8000-000000000080
+                Name: Back wall (right of door)
+                Components:
+                    a1b2c3d4e5f6478090a1b2c3d4e5f601: !TransformComponent
+                        Id: 5a1e0000-0000-4000-8000-000000000081
+                        Position: {X: 3.375, Y: 5.0, Z: -5.25}
+                        Rotation: {X: 0.0, Y: 0.0, Z: 0.0, W: 1.0}
+                        Scale: {X: 3.75, Y: 10.5, Z: 0.5}
+                        Children: {}
+                    a1b2c3d4e5f6478090a1b2c3d4e5f602: !ModelComponent
+                        Id: 5a1e0000-0000-4000-8000-000000000082
+                        Model: 5a1e0000-0000-4000-8000-000000000020:Cube White
+                        Materials: {}
+        -   Entity:
+                Id: 5a1e0000-0000-4000-8000-000000000083
+                Name: Door lintel
+                Components:
+                    a1b2c3d4e5f6478090a1b2c3d4e5f603: !TransformComponent
+                        Id: 5a1e0000-0000-4000-8000-000000000084
+                        Position: {X: 0.0, Y: 8.75, Z: -5.25}
+                        Rotation: {X: 0.0, Y: 0.0, Z: 0.0, W: 1.0}
+                        Scale: {X: 3.0, Y: 3.5, Z: 0.5}
+                        Children: {}
+                    a1b2c3d4e5f6478090a1b2c3d4e5f604: !ModelComponent
+                        Id: 5a1e0000-0000-4000-8000-000000000085
+                        Model: 5a1e0000-0000-4000-8000-000000000020:Cube White
+                        Materials: {}
+        -   Entity:
+                Id: 5a1e0000-0000-4000-8000-000000000086
+                Name: Corridor floor
+                Components:
+                    a1b2c3d4e5f6478090a1b2c3d4e5f605: !TransformComponent
+                        Id: 5a1e0000-0000-4000-8000-000000000087
+                        Position: {X: 0.0, Y: -0.25, Z: -25.25}
+                        Rotation: {X: 0.0, Y: 0.0, Z: 0.0, W: 1.0}
+                        Scale: {X: 4.0, Y: 0.5, Z: 40.0}
+                        Children: {}
+                    a1b2c3d4e5f6478090a1b2c3d4e5f606: !ModelComponent
+                        Id: 5a1e0000-0000-4000-8000-000000000088
+                        Model: 5a1e0000-0000-4000-8000-000000000020:Cube White
+                        Materials: {}
+        -   Entity:
+                Id: 5a1e0000-0000-4000-8000-000000000089
+                Name: Corridor wall (left)
+                Components:
+                    a1b2c3d4e5f6478090a1b2c3d4e5f607: !TransformComponent
+                        Id: 5a1e0000-0000-4000-8000-00000000008a
+                        Position: {X: -2.25, Y: 3.5, Z: -25.25}
+                        Rotation: {X: 0.0, Y: 0.0, Z: 0.0, W: 1.0}
+                        Scale: {X: 0.5, Y: 7.0, Z: 40.0}
+                        Children: {}
+                    a1b2c3d4e5f6478090a1b2c3d4e5f608: !ModelComponent
+                        Id: 5a1e0000-0000-4000-8000-00000000008b
+                        Model: 5a1e0000-0000-4000-8000-000000000020:Cube White
+                        Materials: {}
+        -   Entity:
+                Id: 5a1e0000-0000-4000-8000-00000000008c
+                Name: Corridor wall (right)
+                Components:
+                    a1b2c3d4e5f6478090a1b2c3d4e5f609: !TransformComponent
+                        Id: 5a1e0000-0000-4000-8000-00000000008d
+                        Position: {X: 2.25, Y: 3.5, Z: -25.25}
+                        Rotation: {X: 0.0, Y: 0.0, Z: 0.0, W: 1.0}
+                        Scale: {X: 0.5, Y: 7.0, Z: 40.0}
+                        Children: {}
+                    a1b2c3d4e5f6478090a1b2c3d4e5f60a: !ModelComponent
+                        Id: 5a1e0000-0000-4000-8000-00000000008e
+                        Model: 5a1e0000-0000-4000-8000-000000000020:Cube White
+                        Materials: {}
+        -   Entity:
+                Id: 5a1e0000-0000-4000-8000-00000000008f
+                Name: Corridor light 1 (near)
+                Components:
+                    a1b2c3d4e5f6478090a1b2c3d4e5f60b: !TransformComponent
+                        Id: 5a1e0000-0000-4000-8000-000000000090
+                        Position: {X: -1.2, Y: 1.0, Z: -12.0}
+                        Rotation: {X: 0.0, Y: 0.0, Z: 0.0, W: 1.0}
+                        Scale: {X: 1.5, Y: 1.5, Z: 1.5}
+                        Children: {}
+                    a1b2c3d4e5f6478090a1b2c3d4e5f60c: !ModelComponent
+                        Id: 5a1e0000-0000-4000-8000-000000000091
+                        Model: 5a1e0000-0000-4000-8000-000000000023:Cube Emissive
+                        Materials: {}
+        -   Entity:
+                Id: 5a1e0000-0000-4000-8000-000000000092
+                Name: Corridor light 2 (mid)
+                Components:
+                    a1b2c3d4e5f6478090a1b2c3d4e5f60d: !TransformComponent
+                        Id: 5a1e0000-0000-4000-8000-000000000093
+                        Position: {X: 1.2, Y: 1.0, Z: -24.0}
+                        Rotation: {X: 0.0, Y: 0.0, Z: 0.0, W: 1.0}
+                        Scale: {X: 1.5, Y: 1.5, Z: 1.5}
+                        Children: {}
+                    a1b2c3d4e5f6478090a1b2c3d4e5f60e: !ModelComponent
+                        Id: 5a1e0000-0000-4000-8000-000000000094
+                        Model: 5a1e0000-0000-4000-8000-000000000023:Cube Emissive
+                        Materials: {}
+        -   Entity:
+                Id: 5a1e0000-0000-4000-8000-000000000095
+                Name: Corridor light 3 (far)
+                Components:
+                    a1b2c3d4e5f6478090a1b2c3d4e5f60f: !TransformComponent
+                        Id: 5a1e0000-0000-4000-8000-000000000096
+                        Position: {X: -1.2, Y: 1.0, Z: -36.0}
+                        Rotation: {X: 0.0, Y: 0.0, Z: 0.0, W: 1.0}
+                        Scale: {X: 1.5, Y: 1.5, Z: 1.5}
+                        Children: {}
+                    a1b2c3d4e5f6478090a1b2c3d4e5f610: !ModelComponent
+                        Id: 5a1e0000-0000-4000-8000-000000000097
+                        Model: 5a1e0000-0000-4000-8000-000000000023:Cube Emissive
+                        Materials: {}
+        -   Entity:
+                Id: 5a1e0000-0000-4000-8000-000000000098
+                Name: Corridor red block
+                Components:
+                    a1b2c3d4e5f6478090a1b2c3d4e5f611: !TransformComponent
+                        Id: 5a1e0000-0000-4000-8000-000000000099
+                        Position: {X: 1.3, Y: 1.5, Z: -18.0}
+                        Rotation: {X: 0.0, Y: 0.0, Z: 0.0, W: 1.0}
+                        Scale: {X: 1.2, Y: 3.0, Z: 1.2}
+                        Children: {}
+                    a1b2c3d4e5f6478090a1b2c3d4e5f612: !ModelComponent
+                        Id: 5a1e0000-0000-4000-8000-00000000009a
+                        Model: 5a1e0000-0000-4000-8000-000000000021:Cube Red
+                        Materials: {}
+        -   Entity:
+                Id: 5a1e0000-0000-4000-8000-00000000009b
+                Name: Corridor green block
+                Components:
+                    a1b2c3d4e5f6478090a1b2c3d4e5f613: !TransformComponent
+                        Id: 5a1e0000-0000-4000-8000-00000000009c
+                        Position: {X: -1.3, Y: 1.5, Z: -30.0}
+                        Rotation: {X: 0.0, Y: 0.0, Z: 0.0, W: 1.0}
+                        Scale: {X: 1.2, Y: 3.0, Z: 1.2}
+                        Children: {}
+                    a1b2c3d4e5f6478090a1b2c3d4e5f614: !ModelComponent
+                        Id: 5a1e0000-0000-4000-8000-00000000009d
+                        Model: 5a1e0000-0000-4000-8000-000000000022:Cube Green
+                        Materials: {}
+        -   Entity:
                 Id: 5a1e0000-0000-4000-8000-000000000054
                 Name: Voxel GI
                 Components:
@@ -255,7 +405,9 @@ Hierarchy:
                         Children: {}
                     e053f097e9f94e658186cdee0dc3e6e4: !StrideVoxelGI.VoxelGIVolume,StrideVoxelGI
                         Id: 5a1e0000-0000-4000-8000-000000000052
-                        VolumeSize: 14.0
+                        Follow: !TransformComponent ref!! 5a1e0000-0000-4000-8000-000000000051
+                        VolumeSize: 384.0
+                        ClipMapLevels: 5
                         Quality: Medium
                         BounceIntensity: 1.25
                         SpecularIntensity: 1.0

@@ -31,10 +31,20 @@ namespace StrideVoxelGI;
 /// </summary>
 [Display("Voxel GI Volume", Expand = ExpandRule.Once)]
 [ComponentCategory("Lights")]
-public class VoxelGIVolume : StartupScript
+public class VoxelGIVolume : SyncScript
 {
+    /// <summary>
+    /// Transform to keep the volume centred on - typically the camera or the player. Only the
+    /// position is taken: the volume must stay axis-aligned, and VoxelGridSnapping quantizes the
+    /// movement to whole voxels so the world does not shimmer as it re-voxelizes. Null leaves the
+    /// volume where its entity sits.
+    /// </summary>
+    [DataMember(5)]
+    public TransformComponent? Follow { get; set; }
+
     private VoxelGIQuality quality = VoxelGIQuality.Medium;
     private float volumeSize = 24f;
+    private int clipMapLevels = 1;
     private float bounceIntensity = 1f;
     private float secondBounce = 1f;
     private float specularIntensity = 1f;
@@ -49,6 +59,28 @@ public class VoxelGIVolume : StartupScript
     {
         get => volumeSize;
         set { volumeSize = Math.Max(0.01f, value); Apply(); }
+    }
+
+    /// <summary>
+    /// Clipmap levels: nested detail rings, each covering twice the distance of the previous at
+    /// half its voxel density. 1 keeps the whole volume at full density. With N levels, the finest
+    /// ring only spans <see cref="VolumeSize"/>/2^(N-1) around the entity, so a big world volume
+    /// stays sharp up close and cheap far away - the cone tracer blends between rings on its own.
+    /// Memory and voxelization cost grow linearly with levels, not cubically like resolution.
+    /// </summary>
+    [DataMember(15)]
+    public int ClipMapLevels
+    {
+        get => clipMapLevels;
+        set
+        {
+            value = Math.Clamp(value, 1, 6);
+            if (clipMapLevels == value)
+                return;
+            clipMapLevels = value;
+            if (Volume != null)
+                Rebuild();
+        }
     }
 
     /// <summary>Cost/quality tier. Changing it at runtime rebuilds the voxel storage.</summary>
@@ -168,15 +200,37 @@ public class VoxelGIVolume : StartupScript
     [DataMemberIgnore]
     public VoxelGIPreset Preset { get; private set; } = VoxelGIPreset.For(VoxelGIQuality.Medium);
 
+    /// <summary>
+    /// The clipmap levels actually allocated. The storage texture stacks every level and, for
+    /// anisotropic presets, all six directions along its Y axis, and Direct3D11 caps a 3D texture
+    /// at 2048 per axis - so High/Ultra (128/256 voxels x 6 directions) can only fit 2 or 1
+    /// levels. Asking for more would be an E_INVALIDARG crash in CreateTexture3D, so the request
+    /// is clamped here instead.
+    /// </summary>
+    [DataMemberIgnore]
+    public int EffectiveClipMapLevels
+        => Math.Min(clipMapLevels, Math.Max(1, 2048 / (Preset.Resolution * (Preset.Anisotropic ? 6 : 1))));
+
     /// <summary>Edge of a single voxel of the finest clipmap, in world units.</summary>
     [DataMemberIgnore]
-    public float VoxelSize => Preset.VoxelSizeFor(volumeSize);
+    public float VoxelSize => Preset.VoxelSizeFor(volumeSize / (1 << (EffectiveClipMapLevels - 1)));
 
     private Entity? lightEntity;
 
     public override void Start()
     {
         Rebuild();
+    }
+
+    public override void Update()
+    {
+        if (Follow == null)
+            return;
+
+        // World position, so a camera nested under another entity is followed correctly. The
+        // volume entity is expected to be a scene root; if it were itself nested, the parent's
+        // transform would double up here.
+        Entity.Transform.Position = Follow.WorldMatrix.TranslationVector;
     }
 
     public override void Cancel()
@@ -252,7 +306,10 @@ public class VoxelGIVolume : StartupScript
             return;
 
         Volume.VoxelVolumeSize = volumeSize;
-        Volume.AproximateVoxelSize = Preset.VoxelSizeFor(volumeSize);
+        // The storage derives its clipmap count from VolumeSize / AproximateVoxelSize: each factor
+        // of two past the preset's resolution becomes one more ring. Asking for the finest ring's
+        // voxel size is therefore what turns ClipMapLevels on.
+        Volume.AproximateVoxelSize = VoxelSize;
         Volume.Voxelize = voxelize;
         Volume.VisualizeVoxels = debugView != VoxelGIDebugView.Off;
         Volume.VisualizeIndex = 0;

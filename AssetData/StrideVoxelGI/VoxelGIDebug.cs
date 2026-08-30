@@ -181,7 +181,7 @@ public class VoxelGIDebug : SyncScript
         Print($"[{CycleOpacifyKey}] Opacify       : {target.Opacify:0.0}");
         Print($"[PgDn/PgUp] Raw mip    : {target.DebugMipmap}");
         Print($"[Ctrl+{ScreenshotKey}] Screenshot  : {screenshotStatus}");
-        Print($"    Volume        : {target.VolumeSize:0.#} units, voxel {target.VoxelSize:0.###}");
+        Print($"    Volume        : {target.VolumeSize:0.#} units, voxel {target.VoxelSize:0.###}, {target.EffectiveClipMapLevels}/{target.ClipMapLevels} clip level(s)");
     }
 
     private string screenshotStatus = "ready";
