@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Nicogo. Distributed under the MIT license.
+﻿// Copyright (c) 2026 Nicogo. Distributed under the MIT license.
 using Stride.Core;
 using Stride.Graphics;
 using Stride.Rendering.Voxels;
@@ -9,6 +9,19 @@ namespace StrideVoxelGI;
 /// Four points on the cost/quality curve of voxel cone tracing. Each one picks a clipmap
 /// resolution, a voxel layout and how many cones are traced per pixel — see <see cref="VoxelGIPreset"/>.
 /// </summary>
+/// <summary>How many directions a voxel stores, and so how much of the texture budget it takes.</summary>
+public enum VoxelGIDirectionality
+{
+    /// <summary>One value per voxel. Cheapest, leaks the most light through surfaces.</summary>
+    Isotropic,
+
+    /// <summary>Three: one per axis, the two facings of each packed together.</summary>
+    Paired,
+
+    /// <summary>Six: one per facing. The most accurate, and six times the texture budget.</summary>
+    Anisotropic,
+}
+
 public enum VoxelGIQuality
 {
     /// <summary>64³ isotropic voxels, 6 diffuse cones. Cheapest; use it as the console/low-end tier.</summary>
@@ -39,7 +52,19 @@ public sealed class VoxelGIPreset
     /// voxelization, but a surface no longer receives light that reached the voxel from behind it —
     /// which is what most "light leaks through the wall" complaints actually are.
     /// </summary>
-    public bool Anisotropic;
+    /// <summary>
+    /// How the voxels store direction. Isotropic keeps one value per voxel; paired keeps three
+    /// (one per axis, the two facings packed together); full anisotropic keeps six, one per facing.
+    /// <para>
+    /// More directions means less light leaking through surfaces - and fewer clipmap rings. The
+    /// storage stacks every ring and every direction down the Y axis of one 3D texture, which
+    /// Direct3D11 caps at 2048 texels: at 128^3, six directions leave room for two rings where
+    /// three leave room for five. Rings are what buy voxel size, and voxel size is what actually
+    /// resolves a wall, so paying six directions for a voxel eight times bigger is a bad trade.
+    /// See <see cref="VoxelGIVolume.EffectiveClipMapLevels"/>.
+    /// </para>
+    /// </summary>
+    public VoxelGIDirectionality Directionality;
 
     /// <summary>Cones traced per pixel for diffuse GI: 6 (hemisphere) or 12.</summary>
     public int DiffuseCones = 6;
@@ -76,30 +101,44 @@ public sealed class VoxelGIPreset
     /// </summary>
     public float SpecularRoughnessCutoff = 1.0f;
 
+    /// <summary>
+    /// Trace the diffuse cones into a buffer this many times smaller than the screen along each
+    /// axis, and read that back when shading: 1 traces per shaded pixel, 2 costs a quarter of the
+    /// cones, 4 a sixteenth. Bounced light is low frequency, so what it costs to trace and what it
+    /// costs to apply need not be the same resolution.
+    /// </summary>
+    public int GIResolutionDivisor = 1;
+
     public static VoxelGIPreset For(VoxelGIQuality quality) => quality switch
     {
         VoxelGIQuality.Low => new VoxelGIPreset
         {
             ClipResolution = VoxelStorageClipmaps.Resolutions.x64,
-            Anisotropic = false,
+            Directionality = VoxelGIDirectionality.Isotropic,
             DiffuseCones = 6,
             DiffuseSteps = 5,
             SpecularSteps = 16,
             VoxelizationMSAA = MultisampleCount.X2,
             SpecularRoughnessCutoff = 0.7f,
+            GIResolutionDivisor = 2,
         },
         VoxelGIQuality.High => new VoxelGIPreset
         {
             ClipResolution = VoxelStorageClipmaps.Resolutions.x128,
-            Anisotropic = true,
+            Directionality = VoxelGIDirectionality.Paired,
             DiffuseCones = 12,
             DiffuseSteps = 9,
             SpecularSteps = 40,
         },
         VoxelGIQuality.Ultra => new VoxelGIPreset
         {
-            ClipResolution = VoxelStorageClipmaps.Resolutions.x256,
-            Anisotropic = true,
+            // Not 256^3: the storage stacks rings and directions down one 3D texture's Y axis, and
+            // Direct3D11 caps that at 2048. At 256^3 paired there is room for two rings, which
+            // makes the voxels 0.75 units - four times bigger than this tier's, and bigger than
+            // High's. Rings buy voxel size and voxel size resolves geometry, so Ultra spends its
+            // budget on cones and steps instead, over the finest voxels the cap allows.
+            ClipResolution = VoxelStorageClipmaps.Resolutions.x128,
+            Directionality = VoxelGIDirectionality.Paired,
             DiffuseCones = 12,
             DiffuseSteps = 12,
             SpecularSteps = 60,
@@ -149,7 +188,12 @@ public sealed class VoxelGIPreset
     {
         var attribute = new VoxelAttributeEmissionOpacity
         {
-            VoxelLayout = Anisotropic ? new VoxelLayoutAnisotropic() : new VoxelLayoutIsotropic(),
+            VoxelLayout = Directionality switch
+            {
+                VoxelGIDirectionality.Paired => new VoxelLayoutAnisotropicPaired(),
+                VoxelGIDirectionality.Anisotropic => new VoxelLayoutAnisotropic(),
+                _ => new VoxelLayoutIsotropic(),
+            },
             LightFalloff = VoxelAttributeEmissionOpacity.LightFalloffs.Heuristic,
         };
 

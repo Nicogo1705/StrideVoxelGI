@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Nicogo. Distributed under the MIT license.
+﻿// Copyright (c) 2026 Nicogo. Distributed under the MIT license.
 using System;
 using Stride.Core;
 using Stride.Core.Mathematics;
@@ -74,7 +74,7 @@ public class VoxelGIVolume : SyncScript
         get => clipMapLevels;
         set
         {
-            value = Math.Clamp(value, 1, 6);
+            value = Math.Clamp(value, 1, MaxClipMapLevels);
             if (clipMapLevels == value)
                 return;
             clipMapLevels = value;
@@ -82,6 +82,15 @@ public class VoxelGIVolume : SyncScript
                 Rebuild();
         }
     }
+
+    /// <summary>
+    /// The most rings this preset's resolution can carry. The storage gives each ring a column of
+    /// its 3D texture (capped at 2048 per side) and shares its offset tables with the mipmaps, so
+    /// the ceiling moves with the resolution: thirteen at 128^3, eight at 256^3.
+    /// </summary>
+    [DataMemberIgnore]
+    public int MaxClipMapLevels
+        => VoxelStorageClipmaps.MaxClipMapCount((VoxelStorageClipmaps.Resolutions)Preset.Resolution);
 
     /// <summary>Cost/quality tier. Changing it at runtime rebuilds the voxel storage.</summary>
     [DataMember(20)]
@@ -214,6 +223,28 @@ public class VoxelGIVolume : SyncScript
     [Display(category: "Debug")]
     public int DebugMipmap { get; set; }
 
+    /// <summary>
+    /// Overrides the preset's <see cref="VoxelGIPreset.GIResolutionDivisor"/>: 1 traces the diffuse
+    /// cones per shaded pixel, 2 traces a quarter of them and upsamples, 4 a sixteenth. Zero keeps
+    /// whatever the quality preset asks for.
+    /// <para>
+    /// It needs a depth-only render stage on the graphics compositor to prime the depth buffer the
+    /// pass reads; without one the light quietly keeps marching inline.
+    /// </para>
+    /// </summary>
+    [DataMember(85)]
+    public int GIResolutionDivisor
+    {
+        get => giResolutionDivisor;
+        set { giResolutionDivisor = value; Apply(); }
+    }
+
+    private int giResolutionDivisor;
+
+    /// <summary>The divisor actually in force, preset included.</summary>
+    [DataMemberIgnore]
+    public int EffectiveGIResolutionDivisor => giResolutionDivisor > 0 ? giResolutionDivisor : Preset.GIResolutionDivisor;
+
     /// <summary>The volume built by this component. Null until <see cref="Start"/> has run.</summary>
     [DataMemberIgnore]
     public VoxelVolumeComponent? Volume { get; private set; }
@@ -231,15 +262,15 @@ public class VoxelGIVolume : SyncScript
     public VoxelGIPreset Preset { get; private set; } = VoxelGIPreset.For(VoxelGIQuality.Medium);
 
     /// <summary>
-    /// The clipmap levels actually allocated. The storage texture stacks every level and, for
-    /// anisotropic presets, all six directions along its Y axis, and Direct3D11 caps a 3D texture
-    /// at 2048 per axis - so High/Ultra (128/256 voxels x 6 directions) can only fit 2 or 1
-    /// levels. Asking for more would be an E_INVALIDARG crash in CreateTexture3D, so the request
-    /// is clamped here instead.
+    /// The clipmap levels actually allocated. The storage texture gives each level a column of its
+    /// own along X and each direction a row along Y, and Direct3D11 caps a 3D texture
+    /// at 2048 per axis - so a 128-voxel ring fits sixteen levels and a 256-voxel one eight,
+    /// whatever the directionality. Asking for more would be an E_INVALIDARG crash in
+    /// CreateTexture3D, so the request is clamped here instead.
     /// </summary>
     [DataMemberIgnore]
     public int EffectiveClipMapLevels
-        => Math.Min(clipMapLevels, Math.Max(1, 2048 / (Preset.Resolution * (Preset.Anisotropic ? 6 : 1))));
+        => Math.Min(clipMapLevels, MaxClipMapLevels);
 
     /// <summary>Edge of a single voxel of the finest clipmap, in world units.</summary>
     [DataMemberIgnore]
@@ -355,6 +386,9 @@ public class VoxelGIVolume : SyncScript
         if (Volume == null || Light == null)
             return;
 
+        // A tier change can lower the ceiling under a request that was legal at the previous one.
+        clipMapLevels = Math.Clamp(clipMapLevels, 1, MaxClipMapLevels);
+
         Volume.VoxelVolumeSize = volumeSize;
         // The storage derives its clipmap count from VolumeSize / AproximateVoxelSize: each factor
         // of two past the preset's resolution becomes one more ring. Asking for the finest ring's
@@ -377,6 +411,7 @@ public class VoxelGIVolume : SyncScript
             voxelLight.BounceIntensityScale = secondBounce;
             voxelLight.SpecularIntensityScale = specularIntensity;
             voxelLight.SpecularRoughnessCutoff = Preset.SpecularRoughnessCutoff;
+            voxelLight.ScreenSpaceDivisor = EffectiveGIResolutionDivisor;
         }
 
         // Any settings change can affect what the voxels hold (intensity feeds the second-bounce
