@@ -82,6 +82,10 @@ public class VoxelGIDebug : SyncScript
     [DataMember(94)]
     public Keys CycleProfilerKey { get; set; } = Keys.P;
 
+    /// <summary>Next profiler result page, when the list does not fit on one.</summary>
+    [DataMember(95)]
+    public Keys ProfilerPageKey { get; set; } = Keys.N;
+
     /// <summary>Where screenshots go. Relative paths resolve next to the executable.</summary>
     [DataMember(97)]
     public string ScreenshotDirectory { get; set; } = "Screenshots";
@@ -170,6 +174,12 @@ public class VoxelGIDebug : SyncScript
         if (Input.IsKeyPressed(CycleProfilerKey))
             CycleProfiler();
 
+        // Shift+N goes back to the first page; the engine clamps to the last one on its own.
+        if (profilerPage != ProfilerPage.Off && Input.IsKeyPressed(ProfilerPageKey))
+            GameProfiler.CurrentResultPage = Input.IsKeyDown(Keys.LeftShift) || Input.IsKeyDown(Keys.RightShift)
+                ? 1
+                : GameProfiler.CurrentResultPage + 1;
+
         DrawOverlay(target);
     }
 
@@ -193,6 +203,7 @@ public class VoxelGIDebug : SyncScript
         }
 
         GameProfiler.EnableProfiling();
+        GameProfiler.CurrentResultPage = 1;
         GameProfiler.FilteringMode = profilerPage switch
         {
             ProfilerPage.Cpu => GameProfilingResults.CpuEvents,
@@ -204,6 +215,11 @@ public class VoxelGIDebug : SyncScript
     private void DrawOverlay(VoxelGIVolume target)
     {
         if (!ShowOverlay)
+            return;
+
+        // The profiler draws its report in the same corner; two overlapping walls of text help
+        // no one. While it is up, yield the screen - P still cycles it, N pages through it.
+        if (profilerPage != ProfilerPage.Off)
             return;
 
         var line = OverlayPosition;
