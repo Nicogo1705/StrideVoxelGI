@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Linq;
 using Demo;
+using Demo.Gallery;
+using Stride.Core.Mathematics;
 using Stride.Engine;
 using Stride.Graphics;
 using StrideVoxelGI;
@@ -17,6 +19,7 @@ using StrideVoxelGI;
 //   --settle=N             frames to hold at each stop before capturing (default 90)
 //   --warmup=N             seconds to let the game load and compile before the first stop (default 5)
 //   --dump-gi              also save the reduced-resolution GI buffer at each stop
+//   --gallery              walk a hall of twenty exhibits instead of the Cornell box
 //   --rdc                  ask RenderDoc to capture the frame each stop is shot on
 //   --volume=N             resize the voxel volume, in world units
 //   --levels=N             clipmap rings to ask for
@@ -24,6 +27,7 @@ using StrideVoxelGI;
 //   --quality-cycle        hold the camera still and switch tier at each stop instead
 //   --view=cones|raw       switch to a voxel debug view before capturing
 //   --out=DIR              where the PNGs go (default Screenshots next to the executable)
+//   --res=WxH              render at this size instead of the one in GameSettings
 //   --pivot=N              distance ahead of the camera the tour treats as its subject
 //   --quality=low|medium|high|ultra   switch the volume to that preset first
 //   --divisor=1|2|4        trace the diffuse cones at 1/N of the screen and upsample
@@ -100,6 +104,58 @@ using var game = new Game();
 // is readable. The demo has no use for the debug layer; run the engine's own tests to get it back.
 game.GraphicsDeviceManager.DeviceCreationFlags = DeviceCreationFlags.None;
 
+// GameSettings pins the back buffer at 1920x1080, and the window on this machine is not that: a
+// 1440p or 4K screen stretches the frame up, which reads as a soft, pixelated hall and puts the
+// aliasing back on every mullion that FXAA had just taken off. The Cornell box keeps the fixed
+// size - its screenshots are what the store shows, and a comparison shot is worth nothing if the
+// resolution moves under it - but the gallery is walked around rather than photographed, so it
+// takes the monitor's own resolution unless --res says otherwise.
+var (renderWidth, renderHeight) = ParseSize(Option("--res"));
+if (renderWidth == 0 && args.Contains("--gallery"))
+    (renderWidth, renderHeight) = NativeSize();
+
+if (renderWidth > 0 && renderHeight > 0)
+{
+    game.GraphicsDeviceManager.PreferredBackBufferWidth = renderWidth;
+    game.GraphicsDeviceManager.PreferredBackBufferHeight = renderHeight;
+}
+
+static (int Width, int Height) ParseSize(string? value)
+{
+    var parts = value?.Split('x', 'X');
+    return parts is { Length: 2 } && int.TryParse(parts[0], out var width) && int.TryParse(parts[1], out var height)
+        ? (width, height)
+        : (0, 0);
+}
+
+/// <summary>
+/// The primary output's size on the desktop, or nothing if there is no adapter to ask.
+/// </summary>
+/// <remarks>
+/// Its bounds, not its CurrentDisplayMode: reading the mode makes Stride create a throwaway D3D11
+/// device to resolve it against, and a Debug build asks for a debug device, which is not installed
+/// on most machines - so the console gets a red "Failed to create Direct3D device" for a number
+/// the window rectangle already knows.
+/// </remarks>
+static (int Width, int Height) NativeSize()
+{
+    try
+    {
+        if (GraphicsAdapterFactory.DefaultAdapter is { } adapter)
+        {
+            var outputs = adapter.Outputs;
+            if (outputs.Length > 0 && outputs[0].DesktopBounds is { Width: > 0 } bounds)
+                return (bounds.Width, bounds.Height);
+        }
+    }
+    catch (Exception)
+    {
+        // Headless, or an adapter that will not answer: keep what GameSettings asked for.
+    }
+
+    return (0, 0);
+}
+
 // One exception, and it earns its place: the asset compiler resolves a scene's script tags against
 // the assemblies it has loaded, and the executable's own is not always among them. Stride 4.3 drops
 // BasicCameraController out of the scene with
@@ -113,9 +169,32 @@ game.Script.AddTask(async () =>
 {
     await game.Script.NextFrame();
 
+    // WinForms builds the form at 800x600 and never sets StartPosition, so it lands wherever
+    // Windows' cascade puts it - and the back buffer is then grown to the desktop's own resolution
+    // keeping that top-left corner. A window as wide as the screen, with its origin a few hundred
+    // pixels in, spills onto whatever monitor sits to the right. Centring on the primary output
+    // fixes it and keeps behaving when --res asks for something smaller: a full-size window centres
+    // to (0, 0) on its own.
+    var (screenWidth, screenHeight) = NativeSize();
+    if (screenWidth > 0 && screenHeight > 0)
+    {
+        var bounds = game.Window.ClientBounds;
+        game.Window.Position = new Int2(
+            Math.Max(0, (screenWidth - bounds.Width) / 2),
+            Math.Max(0, (screenHeight - bounds.Height) / 2));
+    }
+
     var scene = game.SceneSystem.SceneInstance?.RootScene;
     if (scene is null)
         return;
+
+    // --gallery replaces the Cornell box with a hall of twenty exhibits, walked in first person.
+    // The box stays the default: it is what the asset's screenshots and the engine repro use.
+    if (args.Contains("--gallery"))
+    {
+        GalleryScene.Build(game);
+        return;
+    }
 
     var cameras = scene.Entities.Where(entity => entity.Get<CameraComponent>() is not null).ToList();
 
@@ -124,6 +203,10 @@ game.Script.AddTask(async () =>
         if (entity.Get<BasicCameraController>() is null)
             entity.Add(new BasicCameraController());
     }
+
+    // Bisecting a screen artefact by hand needs the post chain switchable while it is on screen.
+    if (cameras.FirstOrDefault() is { } host && host.Get<PostEffectsToggle>() is null)
+        host.Add(new PostEffectsToggle());
 
     // The capture pass rides the first camera: it is the one the scene frames the box with, and
     // the tour orbits from wherever that camera stands.

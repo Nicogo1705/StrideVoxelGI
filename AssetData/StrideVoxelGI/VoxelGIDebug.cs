@@ -64,25 +64,78 @@ public class VoxelGIDebug : SyncScript
     [DataMember(60)]
     public Keys FreezeKey { get; set; } = Keys.F;
 
+    /// <summary>Toggles voxelizing every clipmap ring each frame. Rebuilds the storage.</summary>
+    [DataMember(61)]
+    public Keys UpdateAllKey { get; set; } = Keys.T;
+
+    /// <summary>Cycles how radiance is carried down the mipmap chain. Rebuilds the volume.</summary>
+    /// <remarks>
+    /// On the numpad because the letters are spent, and because the two that were left - W and A -
+    /// are the physical keys an AZERTY layout labels Z and Q, which is what this hall's visitor
+    /// walks with. The numpad is the same everywhere.
+    /// </remarks>
+    [DataMember(62)]
+    public Keys LightFalloffKey { get; set; } = Keys.NumPad5;
+
+    /// <summary>Cycles voxelization multisampling. Rebuilds the volume.</summary>
+    [DataMember(63)]
+    public Keys VoxelizationMSAAKey { get; set; } = Keys.NumPad4;
+
     /// <summary>Cycles the quality preset.</summary>
     [DataMember(70)]
     public Keys CycleQualityKey { get; set; } = Keys.Q;
 
-    /// <summary>Lowers the bounce intensity by <see cref="BounceStep"/>.</summary>
+    /// <summary>Lowers the bounce intensity; hold Shift to raise it.</summary>
     [DataMember(80)]
-    public Keys BounceDownKey { get; set; } = Keys.Subtract;
+    public Keys BounceKey { get; set; } = Keys.B;
 
-    /// <summary>Raises the bounce intensity by <see cref="BounceStep"/>.</summary>
+    /// <summary>Lowers the specular intensity; hold Shift to raise it.</summary>
     [DataMember(90)]
-    public Keys BounceUpKey { get; set; } = Keys.Add;
+    public Keys SpecularKey { get; set; } = Keys.C;
 
-    /// <summary>Steps the mip level shown by <see cref="VoxelGIDebugView.Raw"/> down and up.</summary>
+    /// <summary>Lowers how much bounce is re-injected for the next one; Shift raises it.</summary>
+    /// <remarks>
+    /// The loop gain, and the only knob that can make this renderer diverge. Voxelization shades
+    /// each surface with the previous frame's indirect light and writes it back, so the room feeds
+    /// itself; at 1 a closed, bright, saturated room can run away, and it runs away in the colour
+    /// of its largest surface - which is why a hall with a red carpet goes red before it goes
+    /// white. Bounce raises what you see and the gain at the same time, so a room that blows out
+    /// when Bounce goes up is not overexposed, it is diverging: this is the one to bring down.
+    /// </remarks>
+    [DataMember(90)]
+    public Keys SecondBounceKey { get; set; } = Keys.Y;
+
+    /// <summary>Steps the volume's clipmap ring count; hold Shift for more rings.</summary>
+    /// <remarks>
+    /// The setting behind "why is there no detail eight metres away". Rings buy voxel size, and
+    /// they pay for it with the extent of the finest one: five rings over a 96-unit volume leave
+    /// 4.7cm voxels inside a box only six metres across, and a sharp cone runs out of that box long
+    /// before it runs out of steps. Fewer rings widen the box and coarsen the voxel, and no setting
+    /// gives both - which is worth being able to feel rather than read.
+    /// </remarks>
+    [DataMember(91)]
+    public Keys ClipLevelsKey { get; set; } = Keys.U;
+
+    /// <summary>Shrinks the voxelized volume; hold Shift to grow it.</summary>
+    [DataMember(91)]
+    public Keys VolumeSizeKey { get; set; } = Keys.I;
+
+    /// <summary>Lowers the specular intensity by <see cref="SpecularStep"/>.</summary>
+    /// <remarks>
+    /// Numpad / and *, so the reflections sit under the same finger as the bounce on - and +. The
+    /// two are worth moving together: they are the diffuse and specular halves of the same voxel
+    /// data, and a room balanced on one alone reads wrong the moment the other is touched.
+    /// </remarks>
+    [DataMember(91)]
+    public Keys SpecularDownKey { get; set; } = Keys.Divide;
+
+    /// <inheritdoc cref="SpecularDownKey"/>
+    [DataMember(91)]
+    public Keys SpecularUpKey { get; set; } = Keys.Multiply;
+
+    /// <summary>Steps the mip level shown by <see cref="VoxelGIDebugView.Raw"/>; Shift for up.</summary>
     [DataMember(92)]
-    public Keys MipDownKey { get; set; } = Keys.PageDown;
-
-    /// <inheritdoc cref="MipDownKey"/>
-    [DataMember(93)]
-    public Keys MipUpKey { get; set; } = Keys.PageUp;
+    public Keys RawMipKey { get; set; } = Keys.X;
 
     /// <summary>Cycles the voxelization thickening: 0, 1, 2, 4.</summary>
     [DataMember(95)]
@@ -100,6 +153,14 @@ public class VoxelGIDebug : SyncScript
     [DataMember(94)]
     public Keys CycleProfilerKey { get; set; } = Keys.P;
 
+    /// <summary>Shortens the reflection horizon; hold Shift to lengthen it.</summary>
+    [DataMember(93)]
+    public Keys SpecularRangeKey { get; set; } = Keys.J;
+
+    /// <summary>Fewer steps along a reflection; hold Shift for more.</summary>
+    [DataMember(93)]
+    public Keys SpecularStepsKey { get; set; } = Keys.H;
+
     /// <summary>Next profiler result page, when the list does not fit on one.</summary>
     [DataMember(95)]
     public Keys ProfilerPageKey { get; set; } = Keys.N;
@@ -108,9 +169,33 @@ public class VoxelGIDebug : SyncScript
     [DataMember(99)]
     public Keys CycleGIResolutionKey { get; set; } = Keys.R;
 
+    /// <summary>
+    /// Cycles the reflection cone's aperture: the tier's own, then 0.5, 0.25, 0.1. It is the one
+    /// setting that decides whether the metals in a scene read as metal, and it is worth a look
+    /// before concluding that voxel GI cannot do reflections.
+    /// </summary>
+    [DataMember(99)]
+    public Keys CycleSpecularConeKey { get; set; } = Keys.M;
+
+    /// <summary>
+    /// Anchors the volume where it stands, and lets it follow again. A volume that follows the
+    /// camera re-centres every frame, so its rings re-snap as you walk and the indirect light
+    /// visibly swims - right for an open world, wrong for one room.
+    /// </summary>
+    [DataMember(100)]
+    public Keys ToggleFollowKey { get; set; } = Keys.K;
+
     /// <summary>Where screenshots go. Relative paths resolve next to the executable.</summary>
     [DataMember(97)]
     public string ScreenshotDirectory { get; set; } = "Screenshots";
+
+    /// <summary>
+    /// Require Ctrl for every hotkey here. A game that walks on WASD or ZQSD has no free letters
+    /// left, and a debug overlay must not eat a movement key; with this on, the whole set moves to
+    /// Ctrl and nothing collides.
+    /// </summary>
+    [DataMember(101)]
+    public bool RequireControl { get; set; }
 
     /// <summary>
     /// Ignore the hotkeys while the right mouse button is held. Fly-through cameras claim the letter
@@ -125,9 +210,49 @@ public class VoxelGIDebug : SyncScript
     [DataMember(100)]
     public float BounceStep { get; set; } = 0.25f;
 
+    /// <summary>How much <see cref="SpecularUpKey"/> and <see cref="SpecularDownKey"/> move.</summary>
+    [DataMember(151)]
+    public float SpecularStep { get; set; } = 0.25f;
+
+    /// <summary>How much one press moves the voxelization thickening.</summary>
+    [DataMember(153)]
+    public float OpacifyStep { get; set; } = 0.5f;
+
+    /// <summary>How much one press moves the reflection aperture.</summary>
+    [DataMember(154)]
+    public float SpecularConeStep { get; set; } = 0.2f;
+
+    /// <summary>How many steps one press adds to or removes from a reflection.</summary>
+    [DataMember(155)]
+    public int SpecularStepsStep { get; set; } = 64;
+
+    /// <summary>How far, in world units, one press moves the reflection horizon.</summary>
+    [DataMember(156)]
+    public float SpecularRangeStep { get; set; } = 4f;
+
+
+
     public override void Start()
     {
         Target ??= Entity.Get<VoxelGIVolume>();
+        detachedFollow ??= FollowCandidate;
+    }
+
+    /// <summary>
+    /// -1 for the key alone, +1 with Shift, null when it was not pressed.
+    /// </summary>
+    /// <remarks>
+    /// Every number in this overlay moves by a pair rather than a cycle. A cycle is fine for three
+    /// named states and wrong for a value you are searching for: it makes you walk through every
+    /// other setting to come back one notch, and it cannot stop between two of them. Shift as the
+    /// second half of the pair keeps one letter per setting instead of two.
+    /// </remarks>
+    private float? Nudge(Keys key)
+    {
+        if (!Input.IsKeyPressed(key))
+            return null;
+
+        return Input.IsKeyDown(Keys.LeftShift) || Input.IsKeyDown(Keys.RightShift) ? 1f : -1f;
     }
 
     public override void Update()
@@ -144,65 +269,85 @@ public class VoxelGIDebug : SyncScript
             return;
         }
 
+        // One gate for the whole set, so a binding never half-applies.
+        if (RequireControl && !(Input.IsKeyDown(Keys.LeftCtrl) || Input.IsKeyDown(Keys.RightCtrl)))
+        {
+            DrawOverlay(target);
+            return;
+        }
+
         if (Input.IsKeyPressed(ToggleGIKey))
             target.GIEnabled = !target.GIEnabled;
 
-        if (Input.IsKeyPressed(CycleViewKey))
-            target.DebugView = target.DebugView switch
-            {
-                VoxelGIDebugView.Off => VoxelGIDebugView.Cones,
-                VoxelGIDebugView.Cones => VoxelGIDebugView.Raw,
-                _ => VoxelGIDebugView.Off,
-            };
+        if (Nudge(CycleViewKey) is { } view)
+            target.DebugView = Step(target.DebugView, view);
 
         if (Input.IsKeyPressed(FreezeKey))
             target.Voxelize = !target.Voxelize;
 
-        if (Input.IsKeyPressed(CycleQualityKey))
-            target.Quality = target.Quality switch
-            {
-                VoxelGIQuality.Low => VoxelGIQuality.Medium,
-                VoxelGIQuality.Medium => VoxelGIQuality.High,
-                VoxelGIQuality.High => VoxelGIQuality.Ultra,
-                _ => VoxelGIQuality.Low,
-            };
+        if (Input.IsKeyPressed(UpdateAllKey))
+            target.UpdateAllClipmapsEveryFrame = !target.UpdateAllClipmapsEveryFrame;
+
+        if (Nudge(LightFalloffKey) is { } falloff)
+            target.LightFalloff = Step(target.LightFalloff, falloff);
+
+        if (Nudge(VoxelizationMSAAKey) is { } msaa)
+            target.VoxelizationMSAA = Step(target.VoxelizationMSAA, msaa);
+
+        if (Nudge(CycleQualityKey) is { } quality)
+            target.Quality = Step(target.Quality, quality);
 
         // The cones read mip 1 and up, the debug beam reads mip 0 - so an empty mip chain looks
         // like working voxels and black GI. Stepping the level is how you tell them apart.
-        if (Input.IsKeyPressed(MipDownKey))
+        if (Nudge(RawMipKey) is { } mip)
         {
-            target.DebugMipmap = Math.Max(0, target.DebugMipmap - 1);
+            target.DebugMipmap = Math.Max(0, target.DebugMipmap + (int)mip);
             target.RefreshDebugView();
         }
 
-        if (Input.IsKeyPressed(MipUpKey))
-        {
-            target.DebugMipmap++;
-            target.RefreshDebugView();
-        }
+        if (Nudge(CycleOpacifyKey) is { } opacify)
+            target.Opacify = MathF.Max(0f, target.Opacify + opacify * OpacifyStep);
 
-        if (Input.IsKeyPressed(CycleOpacifyKey))
-            target.Opacify = target.Opacify switch { < 0.5f => 1f, < 1.5f => 2f, < 3f => 4f, _ => 0f };
+        if (Nudge(BounceKey) is { } bounce)
+            target.BounceIntensity = MathF.Max(0f, target.BounceIntensity + bounce * BounceStep);
 
-        if (Input.IsKeyPressed(BounceDownKey))
-            target.BounceIntensity = MathF.Max(0f, target.BounceIntensity - BounceStep);
+        if (Nudge(SpecularKey) is { } specular)
+            target.SpecularIntensity = MathF.Max(0f, target.SpecularIntensity + specular * SpecularStep);
 
-        if (Input.IsKeyPressed(BounceUpKey))
-            target.BounceIntensity += BounceStep;
+        if (Nudge(SecondBounceKey) is { } second)
+            target.SecondBounce = Math.Clamp(target.SecondBounce + second * 0.1f, 0f, 1f);
+
+        if (Nudge(ClipLevelsKey) is { } levels)
+            target.ClipMapLevels = Math.Max(1, target.ClipMapLevels + (int)levels);
+
+        if (Nudge(VolumeSizeKey) is { } volume)
+            target.VolumeSize = MathF.Max(1f, target.VolumeSize * (volume > 0f ? 1.5f : 1f / 1.5f));
+
+        // Down to zero, which is the unlimited march this all started with - worth being able to
+        // reach for a comparison, and worth having to walk to rather than land on.
+        if (Nudge(SpecularRangeKey) is { } range)
+            target.SpecularRange = MathF.Max(0f, target.EffectiveSpecularRange + range * SpecularRangeStep);
+
+        if (Nudge(SpecularStepsKey) is { } steps)
+            target.SpecularSteps = Math.Max(16, target.EffectiveSpecularSteps + (int)steps * SpecularStepsStep);
 
         if (Input.IsKeyPressed(ScreenshotKey) && (Input.IsKeyDown(Keys.LeftCtrl) || Input.IsKeyDown(Keys.RightCtrl)))
             SaveScreenshot();
 
-        if (Input.IsKeyPressed(CycleGIResolutionKey))
-            target.GIResolutionDivisor = target.EffectiveGIResolutionDivisor switch
-            {
-                1 => 2,
-                2 => 4,
-                _ => 1,
-            };
+        if (Input.IsKeyPressed(ToggleFollowKey))
+        {
+            (target.Follow, detachedFollow) = (detachedFollow, target.Follow);
+            target.MarkDirty();
+        }
 
-        if (Input.IsKeyPressed(CycleProfilerKey))
-            CycleProfiler();
+        if (Nudge(CycleGIResolutionKey) is { } divisor)
+            target.GIResolutionDivisor = Math.Clamp(target.EffectiveGIResolutionDivisor + (int)divisor, 1, 4);
+
+        if (Nudge(CycleSpecularConeKey) is { } aperture)
+            target.SpecularConeRatio = MathF.Max(0.01f, target.EffectiveSpecularConeRatio + aperture * SpecularConeStep);
+
+        if (Nudge(CycleProfilerKey) is { } profiler)
+            ProfilerPage = Step(profilerPage, profiler);
 
         // Shift+N goes back to the first page; the engine clamps to the last one on its own.
         if (profilerPage != VoxelGIProfilerPage.Off && Input.IsKeyPressed(ProfilerPageKey))
@@ -231,15 +376,12 @@ public class VoxelGIDebug : SyncScript
 
     private VoxelGIProfilerPage profilerPage = VoxelGIProfilerPage.Off;
 
-    private void CycleProfiler()
+    /// <summary>The next value of an enum in declaration order, wrapping, in either direction.</summary>
+    private static T Step<T>(T value, float direction) where T : struct, Enum
     {
-        ProfilerPage = profilerPage switch
-        {
-            VoxelGIProfilerPage.Off => VoxelGIProfilerPage.Fps,
-            VoxelGIProfilerPage.Fps => VoxelGIProfilerPage.Cpu,
-            VoxelGIProfilerPage.Cpu => VoxelGIProfilerPage.Gpu,
-            _ => VoxelGIProfilerPage.Off,
-        };
+        var values = Enum.GetValues<T>();
+        var index = Array.IndexOf(values, value);
+        return values[(index + (int)direction + values.Length) % values.Length];
     }
 
     private void ApplyProfilerPage()
@@ -277,18 +419,62 @@ public class VoxelGIDebug : SyncScript
             line.Y += 18;
         }
 
-        Print($"[{ToggleGIKey}] Voxel GI      : {(target.GIEnabled ? "ON" : "OFF")}");
-        Print($"[{CycleViewKey}] Voxel view    : {target.DebugView}");
-        Print($"[{FreezeKey}] Voxelization  : {(target.Voxelize ? "live" : "frozen")}");
-        Print($"[{CycleQualityKey}] Quality       : {target.Quality} ({target.Preset.Resolution}^3, {target.Preset.DiffuseCones} cones)");
-        Print($"[-/+ numpad] Bounce   : {target.BounceIntensity:0.00}");
-        Print($"[{CycleOpacifyKey}] Opacify       : {target.Opacify:0.0}");
-        Print($"[PgDn/PgUp] Raw mip    : {target.DebugMipmap}");
+        // Under RequireControl the bare letter does nothing, so the overlay must not offer it: a
+        // readout that names a key you have to guess a modifier for is worse than no readout.
+        string Chord(object key) => RequireControl ? $"Ctrl+{key}" : key.ToString()!;
+
+        // Grouped by what you are doing, not by when each was added: the state of the volume, then
+        // the light it produces, then the reflections, then the cost, then the instruments. Someone
+        // hunting a look reads the middle; someone hunting a bug reads the bottom.
+        string Pair(object key) => $"{Chord(key)} +-";
+
+        Print($"[{Chord(ToggleGIKey)}] Voxel GI      : {(target.GIEnabled ? "ON" : "OFF")}");
+        Print($"[{Chord(FreezeKey)}] Voxelization  : {(target.Voxelize ? "live" : "frozen")}");
+        Print($"[{Chord(UpdateAllKey)}] Ring updates  : {(target.UpdateAllClipmapsEveryFrame ? "all rings, every frame" : "one ring per frame")}");
+        Print($"[{Pair(LightFalloffKey)}] Mip falloff: {target.LightFalloff}");
+        Print($"[{Pair(VoxelizationMSAAKey)}] Voxel MSAA : {target.VoxelizationMSAA}");
+        Print($"[{Chord(ToggleFollowKey)}] Volume        : {(target.Follow is null ? "anchored" : "follows the camera")}");
+        Print($"[{Pair(CycleQualityKey)}] Quality    : {target.Quality} ({target.Preset.Resolution}^3, {target.Preset.DiffuseCones} cones)");
+        Print($"[{Pair(VolumeSizeKey)}] Volume size: {target.VolumeSize:0.#} units, voxel {target.VoxelSize:0.###}");
+        Print($"[{Pair(ClipLevelsKey)}] Clip levels: {target.EffectiveClipMapLevels}/{target.ClipMapLevels}, finest ring {target.VolumeSize / (1 << (target.EffectiveClipMapLevels - 1)):0.#} units{(target.IsFrozen ? ", frozen" : "")}");
+        Print("");
+
+        Print($"[{Pair(BounceKey)}] Bounce     : {target.BounceIntensity:0.00}");
+        Print($"[{Pair(SpecularKey)}] Specular   : {target.SpecularIntensity:0.00}");
+        Print($"[{Pair(SecondBounceKey)}] Re-inject  : {target.SecondBounce:0.00}  (loop gain)");
+        Print($"[{Pair(CycleOpacifyKey)}] Opacify    : {target.Opacify:0.0}");
+        Print("");
+
+        Print($"[{Pair(CycleSpecularConeKey)}] Reflect cone  : {target.EffectiveSpecularConeRatio:0.00}");
+        Print($"[{Pair(SpecularStepsKey)}] Reflect steps : {target.EffectiveSpecularSteps}");
+        Print($"[{Pair(SpecularRangeKey)}] Reflect range : {(target.EffectiveSpecularRange > 0f ? $"{target.EffectiveSpecularRange:0.#} units" : "unlimited")}");
+        Print("");
+
+        Print($"[{Pair(CycleGIResolutionKey)}] GI resolution : 1/{target.EffectiveGIResolutionDivisor} of the screen");
+        Print("");
+
+        Print($"[{Pair(CycleViewKey)}] Voxel view : {target.DebugView}");
+        Print($"[{Pair(RawMipKey)}] Raw mip    : {target.DebugMipmap}{(target.DebugView == VoxelGIDebugView.Raw ? "" : "  (raw view only)")}");
+        Print($"[{Pair(CycleProfilerKey)}] Profiler   : {profilerPage}");
+        Print($"[{Chord(ProfilerPageKey)}] Profiler page : {(profilerPage == VoxelGIProfilerPage.Off ? "- (profiler off)" : "next, +Shift first")}");
         Print($"[Ctrl+{ScreenshotKey}] Screenshot  : {screenshotStatus}");
-        Print($"[{CycleGIResolutionKey}] GI resolution : 1/{target.EffectiveGIResolutionDivisor} of the screen");
-        Print($"[{CycleProfilerKey}] Profiler      : {profilerPage}");
-        Print($"    Volume        : {target.VolumeSize:0.#} units, voxel {target.VoxelSize:0.###}, {target.EffectiveClipMapLevels}/{target.ClipMapLevels} clip level(s){(target.IsFrozen ? ", frozen" : "")}");
+        Print("");
+        Print("    +- : la touche seule diminue, avec Shift augmente");
     }
+
+    /// <summary>
+    /// What <see cref="ToggleFollowKey"/> attaches the volume to when the scene starts it anchored.
+    /// </summary>
+    /// <remarks>
+    /// The toggle swaps Follow with what it is holding, so a volume that begins with Follow null
+    /// has nothing to swap in and the key silently does nothing. An interior that fits inside its
+    /// volume wants to start anchored - no movement means no per-ring snapping and no wobble - so
+    /// the camera transform has to arrive by another route for the comparison to stay available.
+    /// </remarks>
+    [DataMember(5)]
+    public TransformComponent? FollowCandidate { get; set; }
+
+    private TransformComponent? detachedFollow;
 
     private string screenshotStatus = "ready";
 

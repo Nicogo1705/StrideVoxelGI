@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <!-- The demo IS the game: one project, no per-platform head to maintain. Stride picks its
@@ -11,6 +11,7 @@
     <StridePlatform Condition="$([MSBuild]::IsOSPlatform('Windows'))">Windows</StridePlatform>
     <StridePlatform Condition="$([MSBuild]::IsOSPlatform('Linux'))">Linux</StridePlatform>
     <StridePlatform Condition="$([MSBuild]::IsOSPlatform('OSX'))">macOS</StridePlatform>
+    <Nullable>enable</Nullable>
     <RootNamespace>Demo</RootNamespace>
     <AssemblyName>Demo</AssemblyName>
   </PropertyGroup>

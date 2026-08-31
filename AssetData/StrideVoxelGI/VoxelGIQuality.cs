@@ -25,16 +25,31 @@ public enum VoxelGIDirectionality
 public enum VoxelGIQuality
 {
     /// <summary>64³ isotropic voxels, 6 diffuse cones. Cheapest; use it as the console/low-end tier.</summary>
-    [Display("Low (64³, 6 cones)")] Low,
+    [Display("Low (64³ isotropic, 6 cones)")] Low,
 
     /// <summary>128³ isotropic voxels, 6 diffuse cones. The sane default.</summary>
-    [Display("Medium (128³, 6 cones)")] Medium,
+    [Display("Medium (128³ isotropic, 6 cones)")] Medium,
 
     /// <summary>128³ anisotropic voxels, 12 diffuse cones. Directional storage kills most light leaking.</summary>
-    [Display("High (128³ anisotropic, 12 cones)")] High,
+    [Display("High (128³ paired, 12 cones)")] High,
 
-    /// <summary>256³ anisotropic voxels, 12 long diffuse cones. Screenshot mode.</summary>
-    [Display("Ultra (256³ anisotropic, 12 cones)")] Ultra,
+    /// <summary>128³ paired voxels, 12 long diffuse cones. Screenshot mode.</summary>
+    [Display("Ultra (128³ paired, 12 long cones)")] Ultra,
+
+    /// <summary>
+    /// 256³ paired voxels. The only tier that widens the sharp region instead of moving it.
+    /// </summary>
+    /// <remarks>
+    /// The finest clipmap ring is always exactly <c>resolution</c> voxels across - ring extent is
+    /// VolumeSize/2^(levels-1) and voxel size is that over the resolution, so their ratio is fixed.
+    /// Every other setting therefore slides along one line: six metres of sharp reflection at 4.7cm
+    /// voxels, or twenty-four at 18.8cm, but never twenty-four at 4.7. Doubling the resolution is
+    /// the only way off that line, and it pays for it in the atlas: rings stack along X and
+    /// directions along Y, so 256³ is a little over six times the texels of 128³ at the same ring
+    /// count - and eight times the voxels to fill each frame. Pair it with one clipmap level fewer
+    /// to spend the gain on ring extent rather than on voxel size.
+    /// </remarks>
+    [Display("Ultra+ (256³ paired, 12 long cones)")] UltraPlus,
 }
 
 /// <summary>
@@ -144,6 +159,22 @@ public sealed class VoxelGIPreset
             SpecularSteps = 60,
             SpecularConeRatio = 0.6f,
         },
+        VoxelGIQuality.UltraPlus => new VoxelGIPreset
+        {
+            ClipResolution = VoxelStorageClipmaps.Resolutions.x256,
+            Directionality = VoxelGIDirectionality.Paired,
+            DiffuseCones = 12,
+            DiffuseSteps = 12,
+            SpecularSteps = 60,
+            SpecularConeRatio = 0.6f,
+
+            // Four rather than the eight the upper tiers inherit. Voxelization multisampling exists
+            // so a surface that only grazes a voxel still writes a fragment, which matters when the
+            // geometry is thinner than the grid - and at this tier the grid is the coarse half of
+            // the trade, so nothing in a room is thin relative to it. Eight samples is the single
+            // most expensive line in the frame and it is buying resolution the voxels cannot hold.
+            VoxelizationMSAA = MultisampleCount.X4,
+        },
         VoxelGIQuality.Medium => new VoxelGIPreset
         {
             VoxelizationMSAA = MultisampleCount.X4,
@@ -181,6 +212,22 @@ public sealed class VoxelGIPreset
     public float Opacify = 2.0f;
 
     /// <summary>
+    /// How radiance is carried down the mipmap chain, and therefore how fast the light dies with
+    /// distance.
+    /// </summary>
+    /// <remarks>
+    /// Merging eight voxels into one asks by how much to divide their radiance. Opacity divides by
+    /// eight in every strategy - it is a volume - but radiance is what a cone reads off a surface,
+    /// and a surface is a 2D projection, so it should fall by four. <c>Sharp</c> divides it by eight
+    /// anyway and every mip comes out half as bright as the last, which is the light draining away
+    /// as the cones climb. <c>PhysicallyBased</c> always divides by four. <c>Heuristic</c> divides
+    /// by the number of filled sub-voxels with a floor of four, so it matches PhysicallyBased on an
+    /// isolated surface and falls back to eight where all eight are filled - inside thick walls and
+    /// large solids, which is precisely where the dimming is noticed.
+    /// </remarks>
+    public VoxelAttributeEmissionOpacity.LightFalloffs LightFalloff = VoxelAttributeEmissionOpacity.LightFalloffs.Heuristic;
+
+    /// <summary>
     /// The one attribute voxel GI actually needs: per-voxel emitted radiance + opacity. Everything
     /// the cones read is written here during the voxelization pass.
     /// </summary>
@@ -194,7 +241,7 @@ public sealed class VoxelGIPreset
                 VoxelGIDirectionality.Anisotropic => new VoxelLayoutAnisotropic(),
                 _ => new VoxelLayoutIsotropic(),
             },
-            LightFalloff = VoxelAttributeEmissionOpacity.LightFalloffs.Heuristic,
+            LightFalloff = LightFalloff,
         };
 
         if (Opacify > 0f)
@@ -213,7 +260,47 @@ public sealed class VoxelGIPreset
     }
 
     /// <summary>The single cone traced for indirect specular (voxel reflections).</summary>
-    public IVoxelMarchMethod CreateSpecularMarcher() => new VoxelMarchCone(SpecularSteps, 0.5f, SpecularConeRatio);
+    /// <summary>
+    /// The specular marcher, optionally with a tighter cone than the tier asks for. The ratio is
+    /// the aperture: at 1 the cone integrates whole mips and hands back the average of the room,
+    /// which is why a mirror under this tier shows a smear rather than a reflection; as it goes to
+    /// zero the cone closes into a ray march at the finest mip, and the reflection sharpens.
+    /// </summary>
+    /// <remarks>
+    /// The two arguments are one setting in two halves. A cone advances by its own current radius,
+    /// so the aperture sets how fast it grows and therefore how far a fixed number of steps
+    /// reaches: closing the cone from 1 to 0.25 makes it four times sharper and roughly four times
+    /// shorter. Sharpen without adding steps and the ray dies a couple of metres out, which reads
+    /// as a black reflection rather than a blurry one - so nothing here closes the cone without
+    /// paying for the range.
+    /// </remarks>
+    /// <summary>
+    /// How far a reflection may travel, in world units, or zero for the old unlimited march.
+    /// </summary>
+    /// <remarks>
+    /// A cone stops on saturation or on leaving the volume, and in a building neither fires: walls
+    /// stop occluding once the cone reads them from a coarse mip, so the ray passes through one a
+    /// few metres out, and the volume is far larger than the rooms inside it. The ray then spends
+    /// the rest of its budget in the empty space outside the geometry and brings back the building
+    /// seen from without - which arrives in the reflection as a small, legible copy of the level.
+    /// Range is what that costs nothing to fix: a reflection is only sharp over its first few
+    /// metres anyway, because past them the cone has widened into an average.
+    /// </remarks>
+    public float SpecularRange = DefaultSpecularRange;
+
+    /// <summary>Range a volume starts at, before anyone touches it.</summary>
+    public const float DefaultSpecularRange = 12f;
+
+    /// <remarks>
+    /// <paramref name="range"/> is passed straight through, unlike the other two: zero is a real
+    /// setting here - it means no horizon at all - so it cannot double as "unset, use the preset".
+    /// </remarks>
+    public IVoxelMarchMethod CreateSpecularMarcher(float coneRatio = 0f, int steps = 0, float range = 0f)
+        => new VoxelMarchCone(
+            steps > 0 ? steps : SpecularSteps,
+            0.5f,
+            coneRatio > 0f ? coneRatio : SpecularConeRatio,
+            range);
 
     /// <summary>Voxel size that makes the finest clipmap line up with a volume of that edge length.</summary>
     public float VoxelSizeFor(float volumeSize) => volumeSize / Resolution;

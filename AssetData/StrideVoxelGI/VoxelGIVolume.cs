@@ -3,6 +3,7 @@ using System;
 using Stride.Core;
 using Stride.Core.Mathematics;
 using Stride.Engine;
+using Stride.Graphics;
 using Stride.Rendering.Voxels;
 using Stride.Rendering.Voxels.Debug;
 using Stride.Rendering.Voxels.VoxelGI;
@@ -52,6 +53,7 @@ public class VoxelGIVolume : SyncScript
     private bool giEnabled = true;
     private bool voxelize = true;
     private VoxelGIDebugView debugView = VoxelGIDebugView.Off;
+    private MultisampleCount? voxelizationMSAA;
 
     /// <summary>Edge of the voxelized cube, in world units. Bigger volume, coarser voxels.</summary>
     [DataMember(10)]
@@ -91,6 +93,29 @@ public class VoxelGIVolume : SyncScript
     [DataMemberIgnore]
     public int MaxClipMapLevels
         => VoxelStorageClipmaps.MaxClipMapCount((VoxelStorageClipmaps.Resolutions)Preset.Resolution);
+
+    /// <summary>
+    /// Multisampling of the voxelization render target, or null for the tier's own.
+    /// </summary>
+    /// <remarks>
+    /// Each covered sample writes a fragment, so this is what keeps geometry thinner than a voxel
+    /// from dropping out of the grid - and it multiplies the cost of the most expensive pass in the
+    /// frame by the sample count. Worth spending where the voxels are fine enough to resolve small
+    /// things, worth almost nothing where they are not.
+    /// </remarks>
+    [DataMember(22)]
+    public MultisampleCount VoxelizationMSAA
+    {
+        get => voxelizationMSAA ?? Preset.VoxelizationMSAA;
+        set
+        {
+            if (voxelizationMSAA == value)
+                return;
+            voxelizationMSAA = value;
+            if (Volume != null)
+                Rebuild();
+        }
+    }
 
     /// <summary>Cost/quality tier. Changing it at runtime rebuilds the voxel storage.</summary>
     [DataMember(20)]
@@ -245,6 +270,85 @@ public class VoxelGIVolume : SyncScript
     [DataMemberIgnore]
     public int EffectiveGIResolutionDivisor => giResolutionDivisor > 0 ? giResolutionDivisor : Preset.GIResolutionDivisor;
 
+    /// <summary>
+    /// Overrides the preset's <see cref="VoxelGIPreset.SpecularConeRatio"/>: the aperture of the
+    /// cone the reflections are traced with, where zero keeps the tier's own. Closing it is what
+    /// turns a metal from a smear into a reflection - and closing it all the way is a ray march,
+    /// which costs what a ray march costs. This is the knob to turn before adding a light.
+    /// </summary>
+    [DataMember(86)]
+    public float SpecularConeRatio
+    {
+        get => specularConeRatio;
+        set { specularConeRatio = value; Apply(); }
+    }
+
+    private float specularConeRatio;
+
+    /// <summary>The aperture actually in force, preset included.</summary>
+    [DataMemberIgnore]
+    public float EffectiveSpecularConeRatio => specularConeRatio > 0f ? specularConeRatio : Preset.SpecularConeRatio;
+
+    /// <summary>
+    /// Overrides the preset's <see cref="VoxelGIPreset.SpecularSteps"/>, or zero for the tier's.
+    /// This is the range half of <see cref="SpecularConeRatio"/> and moves with it.
+    /// </summary>
+    [DataMemberIgnore]
+    public int SpecularSteps
+    {
+        get => specularSteps;
+        set { specularSteps = value; Apply(); }
+    }
+
+    private int specularSteps;
+
+    /// <summary>
+    /// Furthest a reflection may travel, in world units; zero keeps the preset's.
+    /// See <see cref="VoxelGIPreset.SpecularRange"/> for why a reflection needs a horizon at all.
+    /// </summary>
+    [DataMember(87)]
+    public float SpecularRange
+    {
+        get => specularRange;
+        set { specularRange = MathF.Max(0f, value); Apply(); }
+    }
+
+    /// <remarks>
+    /// Initialised from <see cref="VoxelGIPreset.SpecularRange"/> rather than falling back to it,
+    /// because zero is a setting and not an absence: it is the unlimited march this wrapper started
+    /// with. Reading it as "unset" the way the other overrides do would make the one value worth
+    /// comparing against unreachable.
+    /// </remarks>
+    private float specularRange = VoxelGIPreset.DefaultSpecularRange;
+
+    /// <summary>The range in force. Zero is no horizon, not "ask the preset".</summary>
+    [DataMemberIgnore]
+    public float EffectiveSpecularRange => specularRange;
+
+    /// <summary>The step count actually in force, preset included.</summary>
+    [DataMemberIgnore]
+    public int EffectiveSpecularSteps => specularSteps > 0 ? specularSteps : Preset.SpecularSteps;
+
+    /// <summary>
+    /// Overrides the preset's <see cref="VoxelGIPreset.SpecularRoughnessCutoff"/>, or zero for the
+    /// tier's. It is what keeps a long, sharp cone affordable: past the cutoff the march is skipped
+    /// entirely, so a couple of hundred steps are paid for by the polished things that need them
+    /// and by nothing else in the room.
+    /// </summary>
+    [DataMemberIgnore]
+    public float SpecularRoughnessCutoff
+    {
+        get => specularRoughnessCutoff;
+        set { specularRoughnessCutoff = value; Apply(); }
+    }
+
+    private float specularRoughnessCutoff;
+
+    /// <summary>The cutoff actually in force, preset included.</summary>
+    [DataMemberIgnore]
+    public float EffectiveSpecularRoughnessCutoff
+        => specularRoughnessCutoff > 0f ? specularRoughnessCutoff : Preset.SpecularRoughnessCutoff;
+
     /// <summary>The volume built by this component. Null until <see cref="Start"/> has run.</summary>
     [DataMemberIgnore]
     public VoxelVolumeComponent? Volume { get; private set; }
@@ -275,6 +379,53 @@ public class VoxelGIVolume : SyncScript
     /// <summary>Edge of a single voxel of the finest clipmap, in world units.</summary>
     [DataMemberIgnore]
     public float VoxelSize => Preset.VoxelSizeFor(volumeSize / (1 << (EffectiveClipMapLevels - 1)));
+
+    /// <summary>
+    /// Re-voxelize every clipmap ring each frame instead of one ring per frame.
+    /// </summary>
+    /// <remarks>
+    /// What "the lighting swims when I walk" actually is. In the default single-ring mode a ring is
+    /// refreshed once every ClipMapLevels frames and keeps the snapping offset it was given then,
+    /// so at any instant the room is lit by several rings each anchored to a different past camera
+    /// position - and each snapped to its own grid, the coarsest jumping by eight times the finest.
+    /// Updating them together costs roughly one voxelization per ring instead of one in total, and
+    /// removes the lag but not the snapping: only anchoring the volume removes that.
+    /// </remarks>
+    [DataMember(66)]
+    public bool UpdateAllClipmapsEveryFrame
+    {
+        get => updateAllClipmaps;
+        set
+        {
+            if (updateAllClipmaps == value)
+                return;
+            updateAllClipmaps = value;
+            if (Volume != null)
+                Rebuild();
+        }
+    }
+
+    private bool updateAllClipmaps;
+
+    /// <summary>
+    /// How radiance survives the mipmap chain. See <see cref="VoxelGIPreset.LightFalloff"/>.
+    /// Rebuilds the volume.
+    /// </summary>
+    [DataMember(39)]
+    public VoxelAttributeEmissionOpacity.LightFalloffs LightFalloff
+    {
+        get => lightFalloff;
+        set
+        {
+            if (lightFalloff == value)
+                return;
+            lightFalloff = value;
+            if (Volume != null)
+                Rebuild();
+        }
+    }
+
+    private VoxelAttributeEmissionOpacity.LightFalloffs lightFalloff = VoxelAttributeEmissionOpacity.LightFalloffs.Heuristic;
 
     private bool autoFreeze;
     private Int3 lastSnappedPosition;
@@ -335,6 +486,10 @@ public class VoxelGIVolume : SyncScript
     {
         Preset = VoxelGIPreset.For(quality);
         Preset.Opacify = opacify;
+        Preset.UpdateAllClipmapsEveryFrame = updateAllClipmaps;
+        Preset.LightFalloff = lightFalloff;
+        if (voxelizationMSAA is { } msaa)
+            Preset.VoxelizationMSAA = msaa;
 
         // Replace the volume and the light rather than reconfiguring them in place. Everything
         // downstream caches by instance: the voxel renderer keys its per-volume data on the
@@ -410,7 +565,22 @@ public class VoxelGIVolume : SyncScript
         {
             voxelLight.BounceIntensityScale = secondBounce;
             voxelLight.SpecularIntensityScale = specularIntensity;
-            voxelLight.SpecularRoughnessCutoff = Preset.SpecularRoughnessCutoff;
+            voxelLight.SpecularRoughnessCutoff = EffectiveSpecularRoughnessCutoff;
+            // Reuse the marcher when only the range moved. LightVoxelRenderer composes a marcher's
+            // parameter keys in UpdateMarchingLayout, and only calls it when the shader permutation
+            // changes - which range, being a uniform rather than a template argument, does not do.
+            // A fresh instance would therefore carry an uncomposed key and write its value nowhere.
+            // Aperture and step count still need a new one: they are baked into the ShaderSource.
+            if (voxelLight.SpecularMarcher is VoxelMarchCone cone
+                && cone.Steps == EffectiveSpecularSteps
+                && MathF.Abs(cone.ConeRatio - EffectiveSpecularConeRatio) < 0.0001f)
+            {
+                cone.MaxDistance = EffectiveSpecularRange;
+            }
+            else
+            {
+                voxelLight.SpecularMarcher = Preset.CreateSpecularMarcher(specularConeRatio, specularSteps, EffectiveSpecularRange);
+            }
             voxelLight.ScreenSpaceDivisor = EffectiveGIResolutionDivisor;
         }
 
@@ -421,13 +591,25 @@ public class VoxelGIVolume : SyncScript
 
     private IVoxelVisualization? CreateVisualization() => debugView switch
     {
-        // The beam advances one voxel per step, so a fixed step count makes the view's range
-        // shrink as voxels get smaller - at 256^3 it stopped about 11 units out, and the volume
-        // seemed to vanish when the camera backed away. Deriving the count from the volume keeps
-        // the range at roughly twice the volume whatever the quality, so the views compare.
+        // Constants, and that is the point: steps and step scale are both template parameters of
+        // VoxelMarchBeam, baked into the ShaderClassSource. Deriving the count from the volume gave
+        // a fresh shader permutation for every quality tier and every volume size - each one a cold
+        // compile of a specialised loop with texture fetches in it, which is why switching to this
+        // view used to hang for minutes, and again after every Ctrl+Q.
+        //
+        // The old count also lied: it asked for twice the volume in one-voxel steps, 4085 of them
+        // here, and the clamp cut that to 1024 - so the advertised range was never delivered.
+        // 512 steps of two voxels reach the same 1024 voxels for half the compile.
+        //
+        // The step is what sets the banding, and it is worth spending on. The beam advances by a
+        // fixed amount and samples at a fixed radius, so its samples sit on evenly spaced shells
+        // centred on the eye; where a shell grazes a surface it leaves a band, and a family of them
+        // cuts a wall into rings centred on the view axis. Doubling the step doubles their width -
+        // which is already visible. Quadrupling it, for a compile that is only twice as fast again,
+        // is not a trade worth making on the one view whose whole job is to show the data plainly.
         VoxelGIDebugView.Cones => new VoxelVisualizationView
         {
-            MarchMethod = new VoxelMarchBeam(Math.Clamp((int)(volumeSize * 2f / VoxelSize), 64, 1024), 1.0f, 1.0f),
+            MarchMethod = new VoxelMarchBeam(512, 2.0f, 1.0f),
             Background = new Color(0.05f, 0.05f, 0.07f, 1.0f),
         },
         VoxelGIDebugView.Raw => new VoxelVisualizationRaw
