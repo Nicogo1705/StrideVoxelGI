@@ -1,4 +1,4 @@
-!GraphicsCompositorAsset
+﻿!GraphicsCompositorAsset
 Id: 0d506dc5-05f1-4572-b99d-84c5213cf031
 SerializedVersion: {Stride: 3.1.0.1}
 Tags: []
@@ -113,6 +113,7 @@ RenderFeatures:
                         d59ef45dd99e49d3af3887763d153aa7: !Stride.Rendering.Shadows.LightPointShadowMapRendererCubeMap,Stride.Rendering
                             ShadowCasterRenderStage: ref!! 83a8e2ef-c942-4440-af9c-1a5622ebbcf9
             2731c76697c106b6878b9c989a1b6527: !Stride.Rendering.Voxels.VoxelRenderFeature,Stride.Voxels {}
+            42be209952db58294c9f06c58809b8ca: !Stride.Rendering.InstancingRenderFeature,Stride.Rendering {}
     28e9bf54a5adbe063f59fb17acb2723e: !Stride.Rendering.Sprites.SpriteRenderFeature,Stride.Rendering
         RenderStageSelectors:
             d74665cff080638a2439c4422e542d85: !Stride.Rendering.Sprites.SpriteTransparentRenderStageSelector,Stride.Rendering

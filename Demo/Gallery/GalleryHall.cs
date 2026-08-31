@@ -286,18 +286,34 @@ public sealed class GalleryHall
 
         var entity = new Entity("InstancedLamps") { new ModelComponent(model) };
 
-        // The component's own transform is left at the origin and the instances carry the whole
-        // placement, so nothing about where they sit can come from the entity by accident - if one
-        // of them lights the floor, it is because its instance matrix reached the voxelizer.
+        // The instance matrices are absolute: ModelTransformUsage defaults to 0, so the shader
+        // returns InstanceWorld[id] and ignores this transform for placement. What it is still for
+        // is culling - InstancingRenderFeature.Extract sets the instance count and the buffers and
+        // never touches the render object's bounds - so it has to sit over the instances and be
+        // large enough to contain them, or the pair can be rejected by the frustum test while the
+        // voxelization pass, which frames the volume rather than the camera, keeps lighting the
+        // room with geometry the screen never draws.
+        entity.Transform.Position = new Vector3(0, 0, 0f);
+        entity.Transform.Scale = new Vector3(0.05f);
+
         var instances = new InstancingUserArray();
         instances.UpdateWorldMatrices(new[]
         {
-            Matrix.Scaling(0.6f) * Matrix.Translation(-2.2f, 1.6f, -4f),
-            Matrix.Scaling(0.6f) * Matrix.Translation(2.2f, 1.6f, -4f),
-        });
+            // Wide of the runner and short of the Orb, which is at the origin and swallowed them
+            // whole where they were.
+             Matrix.Translation(-4.5f, 2f, 0f),
+             Matrix.Translation(4.5f, 2f, 0f),
+        }, 2);
 
-        entity.Add(new InstancingComponent { Type = instances });
+        // Into the scene first, and only then the instancing. InstancingProcessor resolves the
+        // RenderModel for the entity's ModelComponent when the instancing component is added, and
+        // if that lookup fails it registers nothing and never tries again - so a component added
+        // before the entity exists to the ModelRenderProcessor is silently inert. InstanceCount
+        // stays zero, the mesh is drawn once at this transform, and the instances are simply not
+        // there. The failure has no message and no exception; the object just appears in the wrong
+        // place, once.
         scene.Entities.Add(entity);
+        entity.Add(new InstancingComponent { Type = instances });
     }
 
     /// <summary>Where the visitor stands to read an alcove's plaque.</summary>
