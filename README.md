@@ -42,18 +42,27 @@ Entity.Scene.Entities.Add(gi);
 
 ## Hotkeys in the demo
 
+Every knob on the volume has a key, and the on-screen overlay is the authoritative list — it
+prints each binding next to its current value. Keys marked `+-` step a value: the key alone
+lowers it, with `Shift` it rises (enum keys cycle back and forth the same way).
+
 | Key | Does |
 |-----|------|
 | `G` | Toggle the indirect light. This is the whole pitch in one key. |
-| `V` | Cycle the voxel views: off → ray-marched voxels → raw storage slice. |
-| `F` | Freeze voxelization (keeps lighting from the last capture — the right setting for static geometry). |
-| `Q` | Cycle Low / Medium / High / Ultra. |
-| `O` | Cycle the voxelization thickening: 0, 1, 2, 4. |
-| `PgDn` `PgUp` | Step the mip level shown by the raw view. |
-| numpad `-` `+` | Lower / raise the bounce intensity. |
-| `R` | Cycle the GI resolution: 1/1, 1/2, 1/4 of the screen. |
-| `P` | Cycle Stride's profiler: off / FPS / CPU events / GPU events. The GPU page is what the voxel passes actually cost. |
-| `N` | Next profiler result page (`Shift`+`N` goes back to the first). |
+| `F` / numpad `0` | Freeze voxelization / auto-freeze (voxelize only when something changed). |
+| `T` | Update all clipmap rings every frame instead of one per frame. |
+| `Q` `+-` | Step through Low / Medium / High / Ultra. Overrides below survive it where set. |
+| numpad `7` `8` `+-` | Voxel resolution (32³–256³) and directionality (isotropic / paired / anisotropic). |
+| numpad `9` / `6` `+-` | 6 or 12 diffuse cones / steps along each diffuse cone. |
+| `I` / `U` `+-` | Volume size / clipmap ring count. |
+| `B` / `C` / `Y` `+-` | Bounce intensity / specular intensity / second-bounce re-injection (loop gain). |
+| `O` `+-` | Voxelization thickening (Opacify). |
+| `M` / `H` / `J` / numpad `3` `+-` | Reflection cone aperture / steps / range / roughness cutoff. |
+| numpad `4` / `5` `+-` | Voxelization MSAA / mip light falloff. |
+| `R` `+-` | GI resolution: 1/1, 1/2, 1/4 of the screen. |
+| `K` | Anchor the volume, or let it follow the camera again. |
+| `V` / `X` `+-` | Voxel views (off → ray-marched → raw slice) / raw view mip level. |
+| `P` `+-`, `N` | Stride's profiler pages (off / FPS / CPU / GPU); `N` next result page, `Shift`+`N` first. |
 | `Ctrl`+`S` | Save a PNG of the frame to `Screenshots/`. |
 | right-drag, `WASD`/`ZQSD` | Fly the camera. The keyboard only moves it while the right button is held, so the letter keys above stay free the rest of the time. `C` and `E`/`Space` go down and up, `Shift` goes faster. |
 

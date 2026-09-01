@@ -185,6 +185,37 @@ public class VoxelGIDebug : SyncScript
     [DataMember(100)]
     public Keys ToggleFollowKey { get; set; } = Keys.K;
 
+    /// <summary>Steps the clipmap resolution down through 256/128/64/32; Shift steps up. Rebuilds.</summary>
+    [DataMember(102)]
+    public Keys ClipResolutionKey { get; set; } = Keys.NumPad7;
+
+    /// <summary>Cycles the voxel directionality: isotropic, paired, anisotropic. Rebuilds.</summary>
+    [DataMember(103)]
+    public Keys DirectionalityKey { get; set; } = Keys.NumPad8;
+
+    /// <summary>Switches between 6 and 12 diffuse cones. Rebuilds.</summary>
+    [DataMember(104)]
+    public Keys DiffuseConesKey { get; set; } = Keys.NumPad9;
+
+    /// <summary>Fewer steps along each diffuse cone; hold Shift for more. Rebuilds.</summary>
+    [DataMember(105)]
+    public Keys DiffuseStepsKey { get; set; } = Keys.NumPad6;
+
+    /// <summary>
+    /// Lowers the roughness above which the reflection march is skipped; Shift raises it, and at
+    /// 1 nothing is skipped. The cheap half of the reflection budget: what the cone costs is set
+    /// by its steps, what pays for it is how few surfaces trace one.
+    /// </summary>
+    [DataMember(106)]
+    public Keys SpecularCutoffKey { get; set; } = Keys.NumPad3;
+
+    /// <summary>
+    /// Toggles <see cref="VoxelGIVolume.AutoFreeze"/>: voxelize only when something changed,
+    /// instead of every frame or never.
+    /// </summary>
+    [DataMember(107)]
+    public Keys AutoFreezeKey { get; set; } = Keys.NumPad0;
+
     /// <summary>Where screenshots go. Relative paths resolve next to the executable.</summary>
     [DataMember(97)]
     public string ScreenshotDirectory { get; set; } = "Screenshots";
@@ -346,6 +377,24 @@ public class VoxelGIDebug : SyncScript
         if (Nudge(CycleSpecularConeKey) is { } aperture)
             target.SpecularConeRatio = MathF.Max(0.01f, target.EffectiveSpecularConeRatio + aperture * SpecularConeStep);
 
+        if (Nudge(ClipResolutionKey) is { } resolution)
+            target.ClipResolution = Step(target.ClipResolution, resolution);
+
+        if (Nudge(DirectionalityKey) is { } directions)
+            target.Directionality = Step(target.Directionality, directions);
+
+        if (Input.IsKeyPressed(DiffuseConesKey))
+            target.DiffuseCones = target.DiffuseCones >= 12 ? 6 : 12;
+
+        if (Nudge(DiffuseStepsKey) is { } diffuseSteps)
+            target.DiffuseSteps = Math.Max(1, target.DiffuseSteps + (int)diffuseSteps);
+
+        if (Nudge(SpecularCutoffKey) is { } cutoff)
+            target.SpecularRoughnessCutoff = Math.Clamp(target.EffectiveSpecularRoughnessCutoff + cutoff * 0.1f, 0.1f, 1f);
+
+        if (Input.IsKeyPressed(AutoFreezeKey))
+            target.AutoFreeze = !target.AutoFreeze;
+
         if (Nudge(CycleProfilerKey) is { } profiler)
             ProfilerPage = Step(profilerPage, profiler);
 
@@ -430,11 +479,16 @@ public class VoxelGIDebug : SyncScript
 
         Print($"[{Chord(ToggleGIKey)}] Voxel GI      : {(target.GIEnabled ? "ON" : "OFF")}");
         Print($"[{Chord(FreezeKey)}] Voxelization  : {(target.Voxelize ? "live" : "frozen")}");
+        Print($"[{Chord(AutoFreezeKey)}] Auto-freeze : {(target.AutoFreeze ? (target.IsFrozen ? "on, frozen" : "on, live") : "off")}");
         Print($"[{Chord(UpdateAllKey)}] Ring updates  : {(target.UpdateAllClipmapsEveryFrame ? "all rings, every frame" : "one ring per frame")}");
         Print($"[{Pair(LightFalloffKey)}] Mip falloff: {target.LightFalloff}");
         Print($"[{Pair(VoxelizationMSAAKey)}] Voxel MSAA : {target.VoxelizationMSAA}");
         Print($"[{Chord(ToggleFollowKey)}] Volume        : {(target.Follow is null ? "anchored" : "follows the camera")}");
-        Print($"[{Pair(CycleQualityKey)}] Quality    : {target.Quality} ({target.Preset.Resolution}^3, {target.Preset.DiffuseCones} cones)");
+        Print($"[{Pair(CycleQualityKey)}] Quality    : {target.Quality}");
+        Print($"[{Pair(ClipResolutionKey)}] Voxels    : {(int)target.ClipResolution}^3");
+        Print($"[{Pair(DirectionalityKey)}] Directions: {target.Directionality}");
+        Print($"[{Chord(DiffuseConesKey)}] Diffuse cones : {target.DiffuseCones}");
+        Print($"[{Pair(DiffuseStepsKey)}] Diffuse steps : {target.DiffuseSteps}");
         Print($"[{Pair(VolumeSizeKey)}] Volume size: {target.VolumeSize:0.#} units, voxel {target.VoxelSize:0.###}");
         Print($"[{Pair(ClipLevelsKey)}] Clip levels: {target.EffectiveClipMapLevels}/{target.ClipMapLevels}, finest ring {target.VolumeSize / (1 << (target.EffectiveClipMapLevels - 1)):0.#} units{(target.IsFrozen ? ", frozen" : "")}");
         Print("");
@@ -448,6 +502,7 @@ public class VoxelGIDebug : SyncScript
         Print($"[{Pair(CycleSpecularConeKey)}] Reflect cone  : {target.EffectiveSpecularConeRatio:0.00}");
         Print($"[{Pair(SpecularStepsKey)}] Reflect steps : {target.EffectiveSpecularSteps}");
         Print($"[{Pair(SpecularRangeKey)}] Reflect range : {(target.EffectiveSpecularRange > 0f ? $"{target.EffectiveSpecularRange:0.#} units" : "unlimited")}");
+        Print($"[{Pair(SpecularCutoffKey)}] Reflect cutoff: {(target.EffectiveSpecularRoughnessCutoff >= 1f ? "off (trace all)" : $"roughness {target.EffectiveSpecularRoughnessCutoff:0.0}")}");
         Print("");
 
         Print($"[{Pair(CycleGIResolutionKey)}] GI resolution : 1/{target.EffectiveGIResolutionDivisor} of the screen");

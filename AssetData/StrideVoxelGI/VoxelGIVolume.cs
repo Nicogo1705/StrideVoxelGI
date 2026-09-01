@@ -117,6 +117,89 @@ public class VoxelGIVolume : SyncScript
         }
     }
 
+    /// <summary>
+    /// Voxels along the longest axis of each ring, or the tier's own until set. Rebuilds the
+    /// volume. Resolution is the cubic way to finer voxels where <see cref="ClipMapLevels"/> is
+    /// the linear one - and it moves <see cref="MaxClipMapLevels"/> in the other direction, so
+    /// raising it can silently cost a ring.
+    /// </summary>
+    [DataMember(23)]
+    public VoxelStorageClipmaps.Resolutions ClipResolution
+    {
+        get => clipResolution ?? Preset.ClipResolution;
+        set
+        {
+            if (clipResolution == value)
+                return;
+            clipResolution = value;
+            if (Volume != null)
+                Rebuild();
+        }
+    }
+
+    private VoxelStorageClipmaps.Resolutions? clipResolution;
+
+    /// <summary>
+    /// How many directions each voxel stores, or the tier's own until set. Rebuilds the volume.
+    /// More directions stop light reaching a surface from behind it - the classic leak - for one,
+    /// three or six times the texture budget.
+    /// </summary>
+    [DataMember(24)]
+    public VoxelGIDirectionality Directionality
+    {
+        get => directionality ?? Preset.Directionality;
+        set
+        {
+            if (directionality == value)
+                return;
+            directionality = value;
+            if (Volume != null)
+                Rebuild();
+        }
+    }
+
+    private VoxelGIDirectionality? directionality;
+
+    /// <summary>
+    /// Cones traced per pixel for diffuse GI - 6 or 12, zero for the tier's own. Rebuilds the
+    /// volume.
+    /// </summary>
+    [DataMember(25)]
+    public int DiffuseCones
+    {
+        get => diffuseCones > 0 ? diffuseCones : Preset.DiffuseCones;
+        set
+        {
+            if (diffuseCones == value)
+                return;
+            diffuseCones = value;
+            if (Volume != null)
+                Rebuild();
+        }
+    }
+
+    private int diffuseCones;
+
+    /// <summary>
+    /// Samples along each diffuse cone, zero for the tier's own. Rebuilds the volume. More steps
+    /// carry bounce light further before it fades - and each is paid on every cone of every pixel.
+    /// </summary>
+    [DataMember(26)]
+    public int DiffuseSteps
+    {
+        get => diffuseSteps > 0 ? diffuseSteps : Preset.DiffuseSteps;
+        set
+        {
+            if (diffuseSteps == value)
+                return;
+            diffuseSteps = value;
+            if (Volume != null)
+                Rebuild();
+        }
+    }
+
+    private int diffuseSteps;
+
     /// <summary>Cost/quality tier. Changing it at runtime rebuilds the voxel storage.</summary>
     [DataMember(20)]
     public VoxelGIQuality Quality
@@ -490,6 +573,14 @@ public class VoxelGIVolume : SyncScript
         Preset.LightFalloff = lightFalloff;
         if (voxelizationMSAA is { } msaa)
             Preset.VoxelizationMSAA = msaa;
+        if (clipResolution is { } resolution)
+            Preset.ClipResolution = resolution;
+        if (directionality is { } directions)
+            Preset.Directionality = directions;
+        if (diffuseCones > 0)
+            Preset.DiffuseCones = diffuseCones;
+        if (diffuseSteps > 0)
+            Preset.DiffuseSteps = diffuseSteps;
 
         // Replace the volume and the light rather than reconfiguring them in place. Everything
         // downstream caches by instance: the voxel renderer keys its per-volume data on the
