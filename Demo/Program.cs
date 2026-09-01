@@ -105,15 +105,13 @@ using var game = new Game();
 // is readable. The demo has no use for the debug layer; run the engine's own tests to get it back.
 game.GraphicsDeviceManager.DeviceCreationFlags = DeviceCreationFlags.None;
 
-// Ask for the best GPU in the machine, the way a game is supposed to. Stride already enumerates
-// adapters fastest-first (DXGI GPU preference), but its device picker skips any adapter with no
-// display output - and on a hybrid laptop the discrete GPU drives no display, every screen is
-// wired to the integrated one. The demo then lands on the iGPU with the discrete card idle, which
-// on this machine is the difference between a TDR and a walkable hall. RequiredAdapterUid is the
-// documented way past that filter; presenting from an output-less adapter is Windows' problem,
-// and one it solves routinely. --igpu opts out, for measuring on the small GPU on purpose.
-if (!args.Contains("--igpu") && GraphicsAdapterFactory.Adapters is { Length: > 0 } adapters)
-    game.GraphicsDeviceManager.RequiredAdapterUid = adapters[0].AdapterUid.ToString();
+// The engine picks the fastest GPU on its own now (fork branch gpu-best-adapter: the device
+// picker used to skip adapters with no display output, which on a hybrid laptop is precisely
+// the discrete GPU - every screen is wired to the integrated one). --igpu asks for the
+// battery-friendly adapter instead, for measuring on the small GPU on purpose; the variable
+// must be set before anything touches the graphics adapter list.
+if (args.Contains("--igpu"))
+    Environment.SetEnvironmentVariable("STRIDE_GPU_PREFERENCE", "minimum-power");
 
 // GameSettings pins the back buffer at 1920x1080, and the window on this machine is not that: a
 // 1440p or 4K screen stretches the frame up, which reads as a soft, pixelated hall and puts the
