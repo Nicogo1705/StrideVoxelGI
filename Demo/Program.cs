@@ -31,6 +31,7 @@ using StrideVoxelGI;
 //   --pivot=N              distance ahead of the camera the tour treats as its subject
 //   --quality=low|medium|high|ultra   switch the volume to that preset first
 //   --divisor=1|2|4        trace the diffuse cones at 1/N of the screen and upsample
+//   --igpu                 keep whatever GPU Windows hands out instead of asking for the best one
 //
 // Synthesized key presses do not reach Stride's input, so P and Ctrl+S are out of reach for
 // anything running the demo from the outside. Without these arguments nothing below happens and
@@ -103,6 +104,16 @@ using var game = new Game();
 // which D3D resolves on its own - so the console fills with the same tree forever and nothing else
 // is readable. The demo has no use for the debug layer; run the engine's own tests to get it back.
 game.GraphicsDeviceManager.DeviceCreationFlags = DeviceCreationFlags.None;
+
+// Ask for the best GPU in the machine, the way a game is supposed to. Stride already enumerates
+// adapters fastest-first (DXGI GPU preference), but its device picker skips any adapter with no
+// display output - and on a hybrid laptop the discrete GPU drives no display, every screen is
+// wired to the integrated one. The demo then lands on the iGPU with the discrete card idle, which
+// on this machine is the difference between a TDR and a walkable hall. RequiredAdapterUid is the
+// documented way past that filter; presenting from an output-less adapter is Windows' problem,
+// and one it solves routinely. --igpu opts out, for measuring on the small GPU on purpose.
+if (!args.Contains("--igpu") && GraphicsAdapterFactory.Adapters is { Length: > 0 } adapters)
+    game.GraphicsDeviceManager.RequiredAdapterUid = adapters[0].AdapterUid.ToString();
 
 // GameSettings pins the back buffer at 1920x1080, and the window on this machine is not that: a
 // 1440p or 4K screen stretches the frame up, which reads as a soft, pixelated hall and puts the
