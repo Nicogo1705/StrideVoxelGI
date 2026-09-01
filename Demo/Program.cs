@@ -108,10 +108,10 @@ game.GraphicsDeviceManager.DeviceCreationFlags = DeviceCreationFlags.None;
 // The engine picks the fastest GPU on its own now (fork branch gpu-best-adapter: the device
 // picker used to skip adapters with no display output, which on a hybrid laptop is precisely
 // the discrete GPU - every screen is wired to the integrated one). --igpu asks for the
-// battery-friendly adapter instead, for measuring on the small GPU on purpose; the variable
-// must be set before anything touches the graphics adapter list.
+// battery-friendly adapter instead, for measuring on the small GPU on purpose; it must be set
+// before anything touches the graphics adapter list.
 if (args.Contains("--igpu"))
-    Environment.SetEnvironmentVariable("STRIDE_GPU_PREFERENCE", "minimum-power");
+    GraphicsAdapterFactory.GpuPreference = GpuPreference.MinimumPower;
 
 // GameSettings pins the back buffer at 1920x1080, and the window on this machine is not that: a
 // 1440p or 4K screen stretches the frame up, which reads as a soft, pixelated hall and puts the
