@@ -33,6 +33,44 @@ public class GalleryPlayer : SyncScript
     /// <summary>Switches <see cref="Lantern"/>.</summary>
     public Keys LampKey { get; set; } = Keys.L;
 
+    /// <summary>Switches <see cref="Ghosting"/>.</summary>
+    /// <remarks>
+    /// Unmodified, like every other key the visitor has, and it is only free because the debug
+    /// overlay takes Ctrl+G for the GI switch rather than G. The press is ignored while Ctrl is
+    /// down so that toggling the GI does not also send the visitor through a wall.
+    /// </remarks>
+    public Keys GhostKey { get; set; } = Keys.G;
+
+    /// <summary>Rises and sinks in ghost mode.</summary>
+    /// <remarks>
+    /// Not Ctrl for the descent, which is the usual pairing: Ctrl is the debug overlay's modifier,
+    /// so holding it down to sink turns every letter you then walk on into a GI setting.
+    /// </remarks>
+    public Keys GhostUpKey { get; set; } = Keys.Space;
+
+    public Keys GhostDownKey { get; set; } = Keys.C;
+
+    /// <summary>How much faster the ghost moves than the visitor walks.</summary>
+    /// <remarks>
+    /// A ghost is here to get above the cornice and behind the alcoves in a couple of seconds, and
+    /// it has no floor to judge its speed against - at walking pace the hall reads as enormous and
+    /// crossing it takes fifteen seconds.
+    /// </remarks>
+    public float GhostSpeedFactor { get; set; } = 2.2f;
+
+    /// <summary>
+    /// Off the floor and through the walls: moves along the look direction, ignores
+    /// <see cref="Bounds"/>, and drops the eye-height and gravity rules entirely.
+    /// </summary>
+    /// <remarks>
+    /// It is a lighting tool, not a cheat. Every argument this hall makes is about where the bounce
+    /// comes from, and half of those places - the inside of a cornice slot, the back of an alcove,
+    /// the face of a case from above - cannot be stood in front of. The volume follows the visitor,
+    /// so flying the camera into a wall also drags the finest clipmap ring in there with it, which
+    /// is the only way to see what the ring actually holds at the boundary it is being blamed for.
+    /// </remarks>
+    public bool Ghosting { get; private set; }
+
     /// <summary>
     /// A light the visitor carries: an emissive ball hung in front of them, switched by
     /// <see cref="LampKey"/>. It is not a LightComponent - nothing in this hall is - so it lights
@@ -94,6 +132,16 @@ public class GalleryPlayer : SyncScript
         if (Input.IsKeyPressed(LampKey))
             SetLantern(!LanternOn);
 
+        if (Input.IsKeyPressed(GhostKey) && !Input.IsKeyDown(Keys.LeftCtrl) && !Input.IsKeyDown(Keys.RightCtrl))
+            SetGhosting(!Ghosting);
+
+        if (Ghosting)
+        {
+            UpdateGhost(dt);
+            AnimateLantern((float)Game.UpdateTime.Total.TotalSeconds);
+            return;
+        }
+
         // The floor is flat and there is nothing to land on, so "jumping" is one number: how far
         // above eye height you are. It exists to look over the alcove lintels and under the
         // cornice - the two places the bounce comes from that you cannot otherwise see.
@@ -135,6 +183,58 @@ public class GalleryPlayer : SyncScript
         Entity.Transform.Position = position;
 
         AnimateLantern((float)Game.UpdateTime.Total.TotalSeconds);
+    }
+
+    /// <summary>
+    /// Flies: the whole orientation drives the movement, so looking down and walking forward
+    /// descends, and nothing clamps or falls.
+    /// </summary>
+    private void UpdateGhost(float dt)
+    {
+        var move = Vector3.Zero;
+        if (Input.IsKeyDown(Keys.W) || Input.IsKeyDown(Keys.Z) || Input.IsKeyDown(Keys.Up)) move.Z -= 1;
+        if (Input.IsKeyDown(Keys.S) || Input.IsKeyDown(Keys.Down)) move.Z += 1;
+        if (Input.IsKeyDown(Keys.A) || Input.IsKeyDown(Keys.Q) || Input.IsKeyDown(Keys.Left)) move.X -= 1;
+        if (Input.IsKeyDown(Keys.D) || Input.IsKeyDown(Keys.Right)) move.X += 1;
+
+        // The rise and the fall stay world-vertical whatever the head is doing: a ghost lining up
+        // on a cornice wants to gain height without also drifting the direction it is looking.
+        var lift = 0f;
+        if (Input.IsKeyDown(GhostUpKey)) lift += 1;
+        if (Input.IsKeyDown(GhostDownKey)) lift -= 1;
+
+        if (move == Vector3.Zero && lift == 0)
+            return;
+
+        if (move != Vector3.Zero)
+        {
+            move.Normalize();
+            move = Vector3.Transform(move, Entity.Transform.Rotation);
+        }
+
+        move.Y += lift;
+
+        var speed = (Input.IsKeyDown(Keys.LeftShift) ? RunSpeed : WalkSpeed) * GhostSpeedFactor;
+        Entity.Transform.Position += move * (speed * dt);
+    }
+
+    private void SetGhosting(bool on)
+    {
+        Ghosting = on;
+
+        // Leaving the ghost puts the visitor back on the floor wherever they happen to be, rather
+        // than where they took off from: the jump arc is a single number measured from eye height,
+        // and coming back at nine metres up would let it run for the whole way down.
+        if (on)
+            return;
+
+        (height, vertical) = (0, 0);
+
+        var position = Entity.Transform.Position;
+        position.X = MathUtil.Clamp(position.X, Bounds.Minimum.X, Bounds.Maximum.X);
+        position.Z = MathUtil.Clamp(position.Z, Bounds.Minimum.Z, Bounds.Maximum.Z);
+        position.Y = EyeHeight;
+        Entity.Transform.Position = position;
     }
 
     private void SetLantern(bool on)

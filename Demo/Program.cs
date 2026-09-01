@@ -202,6 +202,19 @@ game.Script.AddTask(async () =>
     if (args.Contains("--gallery"))
     {
         GalleryScene.Build(game);
+
+        // The tour rides the visitor, so --capture and --profiler work in the hall too. Its first
+        // stop is wherever the camera already stands, which here is the head of the nave looking
+        // down it - the viewpoint every measurement of this scene has been taken from. With
+        // --shots=1 that is the only stop, so nothing walks and two runs are comparable.
+        if (tour is not null
+            && game.SceneSystem.SceneInstance?.RootScene.Entities
+                .FirstOrDefault(entity => entity.Get<CameraComponent>() is not null) is { } visitor)
+        {
+            tour.SettleSeconds = MathF.Max(tour.SettleSeconds, 4f);
+            visitor.Add(tour);
+        }
+
         return;
     }
 

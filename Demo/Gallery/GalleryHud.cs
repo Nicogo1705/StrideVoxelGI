@@ -30,25 +30,35 @@ public class GalleryHud : SyncScript
     /// </remarks>
     private static readonly string[] Controls =
     {
-        "ZQSD / WASD    marcher",
-        "Fleches        marcher aussi",
-        "Shift          courir",
-        "Espace         sauter",
-        "L              la boule de lumiere",
-        "E              actionner la vitrine",
-        "Echap          liberer la souris",
-        "Ctrl + touche  reglages du GI",
+        "ZQSD / WASD    walk",
+        "Arrows         walk too",
+        "Shift          run",
+        "Space          jump",
+        "L              the ball of light",
+        "G              ghost mode",
+        "E              work the case",
+        "Esc            free the mouse",
+        "Ctrl + key     GI settings",
     };
 
     /// <summary>Width of one character of the engine's debug font, in pixels.</summary>
     private const int Glyph = 8;
 
+    /// <summary>Shown under the controls only while the ghost is out, since the keys only work then.</summary>
+    private static readonly string[] GhostControls =
+    {
+        "GHOST          the walls are gone",
+        "Space / C      rise / sink",
+    };
+
     private readonly List<GalleryExhibit> exhibits = new();
+    private GalleryPlayer? player;
     private float openingCard = 7f;
 
     public override void Start()
     {
         Collect(SceneSystem.SceneInstance?.RootScene);
+        player = Entity.Get<GalleryPlayer>();
     }
 
     public override void Update()
@@ -69,9 +79,9 @@ public class GalleryHud : SyncScript
         if (openingCard > 0)
         {
             openingCard -= (float)Game.UpdateTime.Elapsed.TotalSeconds;
-            DebugText.Print("LE CABINET DES LUMIERES", new Int2(centre.X - 130, 120));
-            DebugText.Print("vingt pieces sur ce que fait la lumiere quand personne ne la regarde", new Int2(centre.X - 300, 148));
-            DebugText.Print("souris pour regarder - le reste des commandes est dans le coin en haut a droite", new Int2(centre.X - 300, 176));
+            DebugText.Print("THE CABINET OF LIGHTS", new Int2(centre.X - 130, 120));
+            DebugText.Print("twenty pieces on what light does when nobody is looking at it", new Int2(centre.X - 300, 148));
+            DebugText.Print("mouse to look around - the rest of the controls are in the top right corner", new Int2(centre.X - 300, 176));
         }
 
         if (nearest is null)
@@ -82,7 +92,7 @@ public class GalleryHud : SyncScript
 
         if (!nearest.IsInteractive)
         {
-            DebugText.Print("vitrine scellee", new Int2(centre.X - 220, centre.Y + 204));
+            DebugText.Print("case sealed", new Int2(centre.X - 220, centre.Y + 204));
             DrawMaterials(nearest, centre);
             return;
         }
@@ -145,14 +155,26 @@ public class GalleryHud : SyncScript
     /// <summary>Right-aligned against the edge of the back buffer, whatever it is.</summary>
     private void DrawControls(int width)
     {
+        // Measured over both blocks, so the column does not jump sideways when the ghost lines
+        // appear under it.
         var longest = 0;
-        foreach (var control in Controls)
+        foreach (var control in Controls.Concat(GhostControls))
             longest = Math.Max(longest, control.Length);
 
         var x = width - longest * Glyph - 16;
         var y = 16;
 
         foreach (var control in Controls)
+        {
+            DebugText.Print(control, new Int2(x, y));
+            y += 18;
+        }
+
+        if (player?.Ghosting != true)
+            return;
+
+        y += 9;
+        foreach (var control in GhostControls)
         {
             DebugText.Print(control, new Int2(x, y));
             y += 18;

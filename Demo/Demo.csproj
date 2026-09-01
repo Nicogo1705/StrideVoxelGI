@@ -11,6 +11,20 @@
     <StridePlatform Condition="$([MSBuild]::IsOSPlatform('Windows'))">Windows</StridePlatform>
     <StridePlatform Condition="$([MSBuild]::IsOSPlatform('Linux'))">Linux</StridePlatform>
     <StridePlatform Condition="$([MSBuild]::IsOSPlatform('OSX'))">macOS</StridePlatform>
+
+    <!-- Which backend to build against. Stride derives it from StridePlatform when it is empty,
+         which on Windows means Direct3D11 - so leaving it alone changes nothing. Setting it here
+         makes it selectable from the command line:
+
+             dotnet build Demo/Demo.csproj -p:StrideGraphicsApi=Direct3D12
+
+         The package references are filtered by this property during *restore*, not during build,
+         so a switch needs the restore to run again - which it does on its own when the property
+         changes, and which is why passing it to a plain incremental build silently kept the old
+         backend. Each non-default API gets its own bin/ so the three do not overwrite each other's
+         assemblies; Direct3D11 keeps bin/Debug/net10.0 where everything already looks for it. -->
+    <StrideGraphicsApi Condition="'$(StrideGraphicsApi)' == ''">Direct3D11</StrideGraphicsApi>
+    <BaseOutputPath Condition="'$(StrideGraphicsApi)' != 'Direct3D11'">bin\$(StrideGraphicsApi)\</BaseOutputPath>
     <Nullable>enable</Nullable>
     <RootNamespace>Demo</RootNamespace>
     <AssemblyName>Demo</AssemblyName>

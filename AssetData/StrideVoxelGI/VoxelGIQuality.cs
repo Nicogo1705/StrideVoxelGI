@@ -1,4 +1,5 @@
 ﻿// Copyright (c) 2026 Nicogo. Distributed under the MIT license.
+using System;
 using Stride.Core;
 using Stride.Graphics;
 using Stride.Rendering.Voxels;
@@ -86,6 +87,33 @@ public sealed class VoxelGIPreset
 
     /// <summary>Samples along each diffuse cone. More steps = light travels further before it fades.</summary>
     public int DiffuseSteps = 7;
+
+    /// <summary>
+    /// Cones traced for the bounce re-injected into the voxels during voxelization, or 0 to trace
+    /// the same set the camera does.
+    /// </summary>
+    /// <remarks>
+    /// The two are the same question asked for very different readers. The camera's answer is
+    /// looked at; this one is written into a voxel, averaged with every other fragment in it,
+    /// mipmapped, and read back through a cone that integrates a mip - blurred twice before anyone
+    /// sees it. It is also, on this hall, the single most expensive line in the frame: the camera
+    /// traces its cones into a reduced buffer, and a voxel view has no screen to reduce.
+    /// </remarks>
+    public int BounceCones = 6;
+
+    /// <summary>
+    /// Samples along each bounce cone, capped at <see cref="DiffuseSteps"/>, or 0 to march as far
+    /// as the camera's cones do.
+    /// </summary>
+    /// <remarks>
+    /// The step count is a distance, not a quality: VoxelMarchConePerMipmap doubles its stride and
+    /// drops one mip at every step, so N steps reach 2^N voxels. At the 14cm voxel this hall runs,
+    /// twelve steps reach 577 units - a hall 44 long, whose volume is 144 - so the last few march
+    /// through the empty space outside the building to accumulate nothing. It is therefore a safe
+    /// place to cut, but a small one: those steps read mips of a few texels and are the cheapest of
+    /// the march. The saving is in <see cref="BounceCones"/>, which is where this leaves it.
+    /// </remarks>
+    public int BounceSteps;
 
     /// <summary>Samples along the single specular cone (voxel reflections).</summary>
     public int SpecularSteps = 30;
@@ -255,6 +283,25 @@ public sealed class VoxelGIPreset
     {
         var marcher = new VoxelMarchConePerMipmap(1.0f, DiffuseSteps);
         return DiffuseCones >= 12
+            ? new VoxelMarchSetHemisphere12(marcher)
+            : new VoxelMarchSetHemisphere6(marcher);
+    }
+
+    /// <summary>
+    /// The cone set traced while voxelizing, or null when it would be identical to
+    /// <see cref="CreateDiffuseMarcher"/> - in which case the light marches that one in both views
+    /// rather than compiling a second permutation of the same shader.
+    /// </summary>
+    public IVoxelMarchSet? CreateBounceMarcher()
+    {
+        var cones = BounceCones > 0 ? BounceCones : DiffuseCones;
+        var steps = Math.Min(BounceSteps > 0 ? BounceSteps : DiffuseSteps, DiffuseSteps);
+
+        if (cones == DiffuseCones && steps == DiffuseSteps)
+            return null;
+
+        var marcher = new VoxelMarchConePerMipmap(1.0f, steps);
+        return cones >= 12
             ? new VoxelMarchSetHemisphere12(marcher)
             : new VoxelMarchSetHemisphere6(marcher);
     }

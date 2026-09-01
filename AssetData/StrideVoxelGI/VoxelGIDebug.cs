@@ -514,7 +514,7 @@ public class VoxelGIDebug : SyncScript
         Print($"[{Chord(ProfilerPageKey)}] Profiler page : {(profilerPage == VoxelGIProfilerPage.Off ? "- (profiler off)" : "next, +Shift first")}");
         Print($"[Ctrl+{ScreenshotKey}] Screenshot  : {screenshotStatus}");
         Print("");
-        Print("    +- : la touche seule diminue, avec Shift augmente");
+        Print("    +- : the key alone lowers it, with Shift raises it");
     }
 
     /// <summary>

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -109,6 +109,8 @@ public class CaptureTour : SyncScript
     public int GIResolutionDivisor { get; set; }
 
     private readonly List<(string Name, Vector3 Position, Quaternion Rotation)> stops = new();
+    private Vector3 startPosition;
+    private Quaternion startRotation;
     private VoxelGIDebug? debug;
     private int stop;
     private int frames;
@@ -119,6 +121,13 @@ public class CaptureTour : SyncScript
 
     public override void Start()
     {
+        // The pose the scene shipped, not the one the camera happens to hold once the warmup is
+        // over: a first-person scene has a controller on that camera, and the mouse jumps the frame
+        // its position is locked. Two runs must be photographed from the same place to be worth
+        // comparing, and the place they should agree on is the one the scene chose.
+        startPosition = Entity.Transform.Position;
+        startRotation = Entity.Transform.Rotation;
+
         debug = FindInScene<VoxelGIDebug>();
 
         if (debug is not null && !string.IsNullOrWhiteSpace(OutputDirectory))
@@ -294,8 +303,8 @@ public class CaptureTour : SyncScript
     /// </remarks>
     private void BuildStops()
     {
-        var eye = Entity.Transform.WorldMatrix.TranslationVector;
-        var rotation = Entity.Transform.Rotation;
+        var eye = startPosition;
+        var rotation = startRotation;
         var forward = Vector3.TransformNormal(-Vector3.UnitZ, Matrix.RotationQuaternion(rotation));
 
         stops.Add(("scene", eye, rotation));

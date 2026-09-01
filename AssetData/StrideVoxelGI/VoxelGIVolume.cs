@@ -614,6 +614,7 @@ public class VoxelGIVolume : SyncScript
                 Volume = Volume,
                 AttributeIndex = 0,
                 DiffuseMarcher = Preset.CreateDiffuseMarcher(),
+                BounceMarcher = Preset.CreateBounceMarcher(),
                 SpecularMarcher = Preset.CreateSpecularMarcher(),
             },
         };
