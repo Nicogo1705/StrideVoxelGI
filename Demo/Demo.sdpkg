@@ -13,4 +13,7 @@ OutputGroupDirectories: {}
 ExplicitFolders: []
 Bundles: []
 TemplateFolders: []
-RootAssets: []
+RootAssets:
+    - 5a1e0000-0000-4000-8000-000000000001:MainScene
+    - 3f2c81aa-6d54-4c9b-9a17-5b0f7c2d41e8:MenuFont
+    - 8b1e46d3-90c7-4f2a-b6d8-2e37a95c4f10:MenuFontBold

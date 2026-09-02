@@ -22,15 +22,15 @@ public static class GalleryScene
     /// <summary>The palette, so an exhibit can repaint itself when the visitor asks.</summary>
     public static GalleryPalette? Palette { get; private set; }
 
-    public static void Build(Game game)
+    public static void Build(Game game, Entity visitor)
     {
         var scene = game.SceneSystem.SceneInstance?.RootScene;
         if (scene is null)
             return;
 
-        // The Cornell box that ships with the demo is not part of this: clear it out rather than
-        // build a gallery inside it.
-        scene.Entities.Clear();
+        // Nothing is cleared here. The shell empties the scene before it builds a demo, and it
+        // keeps its own entity in it - the one carrying the menu and the key that leaves. Clearing
+        // the scene from inside a demo takes that with it, and the demo becomes a room with no door.
 
         Palette = new GalleryPalette(game.GraphicsDevice);
         var hall = new GalleryHall(game.GraphicsDevice, scene, Palette);
@@ -38,7 +38,7 @@ public static class GalleryScene
         hall.BuildShell();
         GalleryExhibits.Build(hall);
 
-        var visitor = BuildVisitor(game, scene, hall);
+        BuildVisitor(game, visitor, hall);
         BuildVolume(scene, visitor);
         BuildFill(scene);
         CalmThePostChain(game);
@@ -115,19 +115,17 @@ public static class GalleryScene
         effects.LocalReflections.Enabled = true;
     }
 
-    /// <summary>The visitor: a camera at eye height, and the two scripts that drive it.</summary>
-    private static Entity BuildVisitor(Game game, Scene scene, GalleryHall hall)
+    /// <summary>The visitor: the shell's camera, put at eye height and given the scripts that drive it.</summary>
+    private static Entity BuildVisitor(Game game, Entity visitor, GalleryHall hall)
     {
-        var camera = new CameraComponent
+        if (visitor.Get<CameraComponent>() is { } camera)
         {
-            Projection = CameraProjectionMode.Perspective,
-            VerticalFieldOfView = 68f,
-            NearClipPlane = 0.08f,
-            FarClipPlane = 220f,
-            Slot = game.SceneSystem.GraphicsCompositor.Cameras[0].ToSlotId(),
-        };
+            camera.Projection = CameraProjectionMode.Perspective;
+            camera.VerticalFieldOfView = 68f;
+            camera.NearClipPlane = 0.08f;
+            camera.FarClipPlane = 220f;
+        }
 
-        var visitor = new Entity("Visitor") { camera };
         visitor.Transform.Position = new Vector3(0, 1.68f, GalleryHall.HalfLength - 3f);
         visitor.Transform.Rotation = Quaternion.RotationY(MathUtil.Pi);
 
@@ -151,7 +149,6 @@ public static class GalleryScene
         // top of the volume line and its key is one more thing to explain, for a switch a visitor
         // has no use for. The gallery's post chain is set once, in CalmThePostChain.
 
-        scene.Entities.Add(visitor);
         return visitor;
     }
 

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Linq;
 using Demo;
+using Demo.Shell;
 using Demo.Gallery;
 using Stride.Core.Mathematics;
 using Stride.Engine;
@@ -197,43 +198,46 @@ game.Script.AddTask(async () =>
     if (scene is null)
         return;
 
-    // --gallery replaces the Cornell box with a hall of twenty exhibits, walked in first person.
-    // The box stays the default: it is what the asset's screenshots and the engine repro use.
-    if (args.Contains("--gallery"))
-    {
-        GalleryScene.Build(game);
+    // The game starts on an empty scene carrying the home screen, and the shell loads whichever
+    // demo is chosen - or the one named on the command line, so every measurement path keeps the
+    // flow it always had.
+    var requested = args.Contains("--gallery") ? DemoCatalog.Gallery
+                  : args.Contains("--voxelgrid") ? DemoCatalog.VoxelGrid
+                  : capture || profiler != VoxelGIProfilerPage.Off ? DemoCatalog.CornellBox
+                  : (int?)null;
 
-        // The tour rides the visitor, so --capture and --profiler work in the hall too. Its first
-        // stop is wherever the camera already stands, which here is the head of the nave looking
-        // down it - the viewpoint every measurement of this scene has been taken from. With
-        // --shots=1 that is the only stop, so nothing walks and two runs are comparable.
-        if (tour is not null
-            && game.SceneSystem.SceneInstance?.RootScene.Entities
-                .FirstOrDefault(entity => entity.Get<CameraComponent>() is not null) is { } visitor)
+    // The traced voxel pass joins the compositor now, switched off: adding a renderer once a frame
+    // is in flight modifies the list being walked to draw it.
+    VoxelGridDemo.InstallPass(game);
+
+    // Screen space reflections read a normals buffer that only a scene with meshes produces, and the
+    // game now starts on one with none. Off until a demo asks for it - the gallery does.
+    if (PostEffectsToggle.FindPostEffects(game.SceneSystem.GraphicsCompositor?.Game) is { } startupEffects)
+        startupEffects.LocalReflections.Enabled = false;
+
+    // A camera from frame zero: a frame drawn with none walks into the post chain without a depth
+    // buffer. On its own entity, so leaving the menu removes it with everything else.
+    scene.Entities.Add(new Entity(DemoShell.MenuCameraName)
+    {
+        new CameraComponent
         {
-            tour.SettleSeconds = MathF.Max(tour.SettleSeconds, 4f);
-            visitor.Add(tour);
-        }
+            VerticalFieldOfView = 60f,
+            NearClipPlane = 0.1f,
+            FarClipPlane = 100f,
+            Slot = game.SceneSystem.GraphicsCompositor.Cameras[0].ToSlotId(),
+        },
+    });
 
-        return;
-    }
-
-    var cameras = scene.Entities.Where(entity => entity.Get<CameraComponent>() is not null).ToList();
-
-    foreach (var entity in cameras)
+    scene.Entities.Add(new Entity("Shell")
     {
-        if (entity.Get<BasicCameraController>() is null)
-            entity.Add(new BasicCameraController());
-    }
-
-    // Bisecting a screen artefact by hand needs the post chain switchable while it is on screen.
-    if (cameras.FirstOrDefault() is { } host && host.Get<PostEffectsToggle>() is null)
-        host.Add(new PostEffectsToggle());
-
-    // The capture pass rides the first camera: it is the one the scene frames the box with, and
-    // the tour orbits from wherever that camera stands.
-    if (tour is not null && cameras.FirstOrDefault() is { } camera)
-        camera.Add(tour);
+        new DemoShell
+        {
+            StartWith = requested,
+            Profiler = profiler,
+            ShotDirectory = Option("--shot"),
+            Tour = tour,
+        },
+    });
 });
 
 game.Run();

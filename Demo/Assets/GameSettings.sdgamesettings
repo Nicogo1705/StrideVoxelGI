@@ -2,7 +2,7 @@
 Id: 5a1e0000-0000-4000-8000-000000000002
 SerializedVersion: {Stride: 3.1.0.1}
 Tags: []
-DefaultScene: 5a1e0000-0000-4000-8000-000000000001:MainScene
+DefaultScene: 5a1e0000-0000-4000-8000-0000000000f0:MenuScene
 GraphicsCompositor: 0d506dc5-05f1-4572-b99d-84c5213cf031:GraphicsCompositor
 Defaults:
     - !Stride.Audio.AudioEngineSettings,Stride.Audio
