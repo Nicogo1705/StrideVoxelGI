@@ -362,6 +362,13 @@ public sealed class DemoShell : SyncScript
             shooter.Poses.Add((centre + new Vector3(extent * 0.8f, extent * 0.30f, -extent * 0.55f), centre, "corner"));
             shooter.Poses.Add((centre + new Vector3(0, extent * 1.15f, -extent * 0.25f), centre, "above"));
             shooter.Poses.Add((centre + new Vector3(-extent * 0.2f, extent * 0.06f, -extent * 0.42f), centre, "grazing"));
+
+            // Close enough on the sphere that a cell is a good many pixels across. What goes wrong in
+            // a traced surface goes wrong at the scale of one cell - a facet on the wrong plane, a
+            // normal that flips, a join that steps - and every pose above is too far out to show it.
+            var ball = VoxelGridDemo.SphereCentre;
+            var standoff = VoxelGridDemo.SphereRadius + 1.6f;
+            shooter.Poses.Add((ball + new Vector3(-standoff * 0.45f, standoff * 0.35f, -standoff * 0.82f), ball, "sphere"));
         }
         else
         {

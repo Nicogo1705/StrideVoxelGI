@@ -44,6 +44,11 @@ public static class VoxelGridDemo
 
     public static float Extent => (Samples - 1) * CellSize;
 
+    /// <summary>Centre and radius of the sphere in the field, so a capture can frame it.</summary>
+    public static Vector3 SphereCentre => new(Extent * 0.5f, Extent * 0.42f, Extent * 0.5f);
+
+    public const float SphereRadius = 3.4f;
+
     /// <summary>
     /// A field worth looking at: rolling ground, a big sphere half sunk into it, and an arch, each
     /// with its own material id so the packed source has something to colour.
@@ -51,7 +56,7 @@ public static class VoxelGridDemo
     public static ushort[] Generate()
     {
         var samples = new ushort[Samples * Samples * Samples];
-        var centre = new Vector3(Extent * 0.5f, Extent * 0.42f, Extent * 0.5f);
+        var centre = SphereCentre;
 
         for (int x = 0; x < Samples; ++x)
         {
@@ -71,7 +76,7 @@ public static class VoxelGridDemo
 
                     // A sphere sitting in the ground, and an arch crossing it: a torus cut in half
                     // by the ground plane reads as an arch from any angle.
-                    var sphere = Saturate((3.4f - (p - centre).Length()) * 0.9f);
+                    var sphere = Saturate((SphereRadius - (p - centre).Length()) * 0.9f);
                     var toCentre = new Vector2(p.X - centre.X, p.Z - centre.Z + 5.0f);
                     var ring = new Vector2(toCentre.Length() - 4.0f, p.Y - Extent * 0.30f);
                     var arch = Saturate((1.1f - ring.Length()) * 1.2f);

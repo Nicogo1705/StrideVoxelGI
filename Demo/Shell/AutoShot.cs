@@ -35,40 +35,42 @@ public sealed class AutoShot : SyncScript
     public List<(Vector3 From, Vector3 To, string Name)> Poses { get; } = [];
 
     private int frame;
-    private int taken;
+    private int posed;
+    private int saved;
 
     public override void Update()
     {
         frame++;
-        if (frame < WarmupFrames || taken >= Poses.Count)
+        if (frame < WarmupFrames)
+            return;
+
+        // One pose per interval: moved to on the first frame of it, read back on the last, because
+        // the frame on screen during an interval is the pose set at the start of it.
+        if ((frame - WarmupFrames) % FramesBetween != 0)
+            return;
+
+        // The pose held during the interval that just ended. Saving happens before posing, and on
+        // its own counter, so the last pose is saved too - trailing it off the end of the run is how
+        // it went missing before, silently, leaving one fewer file than there are poses.
+        if (saved < posed)
+            Save(Poses[saved++].Name);
+
+        if (posed >= Poses.Count)
         {
-            if (taken >= Poses.Count && frame >= WarmupFrames + Poses.Count * FramesBetween + 4)
+            if (saved >= Poses.Count)
                 ((Game)Game).Exit();
             return;
         }
-
-        // One pose per interval: move on the first frame of it, read back on the last.
-        var elapsed = frame - WarmupFrames;
-        if (elapsed % FramesBetween != 0)
-            return;
 
         var camera = SceneSystem.SceneInstance.RootScene.Entities
             .FirstOrDefault(entity => entity.Get<CameraComponent>() is { Enabled: true });
         if (camera is null)
             return;
 
-        var pose = Poses[taken];
+        var pose = Poses[posed++];
         camera.Transform.Position = pose.From;
         camera.Transform.Rotation = LookAt(pose.From, pose.To);
         camera.Transform.UpdateWorldMatrix();
-
-        // The frame on screen is the previous pose, so a shot is taken one interval after the move.
-        if (taken > 0)
-            Save(Poses[taken - 1].Name);
-
-        taken++;
-        if (taken == Poses.Count)
-            frame = WarmupFrames + Poses.Count * FramesBetween - FramesBetween + 1;
     }
 
     /// <summary>Rotation that looks from one point to another, with no roll.</summary>
