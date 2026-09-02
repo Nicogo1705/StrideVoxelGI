@@ -135,17 +135,23 @@ public static class VoxelGridDemo
                     if (distance > radius)
                         continue;
 
-                    // A soft edge rather than a hard one: the surface is an interpolation of these
-                    // samples, so a ball cut with a step in it comes out with a step in it.
-                    var strength = 1f - distance / radius;
                     var index = (x * Samples + y) * Samples + z;
                     var previous = cachedSamples[index];
                     var density = previous & 0xFF;
                     var material = previous & 0xFF00;
 
+                    // Empty to the core, feathered only at the rim. Interpolating the whole ball
+                    // towards zero instead moves most of it a little, and a sample has to cross the
+                    // iso level to change anything at all - so on a thin shape the whole thickness
+                    // drops below it and vanishes, while solid ground loses a pinprick at the exact
+                    // centre and looks untouched. The rim is still soft, because the surface is an
+                    // interpolation of these samples and a hard cut comes out with a step in it.
+                    var edge = MathUtil.Clamp((distance - radius * 0.55f) / (radius * 0.45f), 0f, 1f);
+                    var limit = (int)MathF.Round(255f * edge);
+
                     var target = fill
-                        ? (int)MathF.Round(MathUtil.Lerp(density, 255f, strength))
-                        : (int)MathF.Round(MathUtil.Lerp(density, 0f, strength));
+                        ? Math.Max(density, 255 - limit)
+                        : Math.Min(density, limit);
                     target = Math.Clamp(target, 0, 255);
                     if (target == density)
                         continue;
@@ -163,19 +169,56 @@ public static class VoxelGridDemo
             }
         }
 
-        if (touched)
-            gpuBuffer.SetData(game.GraphicsContext.CommandList, gpuSamples);
+        if (!touched)
+            return;
+
+        gpuBuffer.SetData(game.GraphicsContext.CommandList, gpuSamples);
+
+        // Physics already sees the edit; this is for anything that kept a copy of the surface, which
+        // here is the F11 wireframe. Cheap on this collider - a shape slot swap, no tree rebuilt.
+        collider.NotifyFieldChanged();
     }
 
     /// <summary>Whether the traced pass draws. Owned by the shell, since the pass outlives the scene.</summary>
     private static VoxelGridTraversalDDA? traversal;
 
-    /// <summary>Smooth iso-surface, or cubes. Both walk the same cells.</summary>
+    /// <summary>
+    /// What the traced pass stops on: the cells themselves, or the crossing on the trilinear field -
+    /// which is the surface marching cubes meshes. Both walk the same cells.
+    /// </summary>
     public static bool Smooth
     {
         get => traversal?.Smooth ?? true;
         set { if (traversal is not null) traversal.Smooth = value; }
     }
+
+    /// <summary>Name of the surface the traced pass is drawing, for the readout.</summary>
+    public static string SurfaceName => Smooth ? "iso-surface (marching cubes)" : "cubes";
+
+    /// <summary>
+    /// What the collider presents to the narrow phase, cycled through the four forms.
+    /// </summary>
+    /// <remarks>
+    /// Worth pairing deliberately rather than leaving on a default. Cubes drawn against a box
+    /// collider agree exactly; the traced iso-surface agrees with marching cubes, whose vertices sit
+    /// on the same crossings. Surface nets averages those crossings into one vertex per cell, so it
+    /// follows the drawn surface at a distance of a fraction of a cell rather than being it - which
+    /// is visible as soon as both are on screen at once.
+    /// </remarks>
+    public static VoxelChildForm ColliderForm
+    {
+        get => collider?.Form ?? VoxelChildForm.TriangleMarchingCubes;
+        set { if (collider is not null) collider.Form = value; }
+    }
+
+    /// <summary>Steps to the next collider form.</summary>
+    public static void CycleColliderForm() => ColliderForm = ColliderForm switch
+    {
+        VoxelChildForm.Box => VoxelChildForm.Sphere,
+        VoxelChildForm.Sphere => VoxelChildForm.TriangleMarchingCubes,
+        VoxelChildForm.TriangleMarchingCubes => VoxelChildForm.TriangleSurfaceNets,
+        _ => VoxelChildForm.Box,
+    };
 
     public static bool PassEnabled
     {
@@ -212,12 +255,14 @@ public static class VoxelGridDemo
         PassEnabled = false;
     }
 
+    private static VoxelGridRenderer? renderer;
+
     public static void Build(Game game, Entity camera)
         => BuildScene(game, game.SceneSystem.SceneInstance.RootScene, camera, cachedSamples ??= Generate());
 
     private static void InstallPass(Game game, ushort[] samples)
     {
-        var renderer = new VoxelGridRenderer
+        renderer = new VoxelGridRenderer
         {
             Traversal = traversal = new VoxelGridTraversalDDA
             {
@@ -243,9 +288,15 @@ public static class VoxelGridDemo
         // -- the same field, collided against ------------------------------------------------
         collider = new VoxelCollider
         {
-            Form = VoxelChildForm.TriangleSurfaceNets,
+            // Marching cubes rather than surface nets, so the collision surface is the one that is
+            // drawn: its vertices sit exactly on the crossings along cell edges, which is where the
+            // trilinear field the renderer solves puts the surface. Surface nets averages those
+            // crossings into one vertex per cell - a deliberate smoothing of the same surface, and
+            // therefore a surface that follows the drawn one at a distance rather than being it.
+            Form = VoxelChildForm.TriangleMarchingCubes,
             CellSize = CellSize,
             IsoLevel = IsoLevel,
+
         };
         collider.SetData(Samples, Samples, Samples, samples);
 

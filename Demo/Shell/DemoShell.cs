@@ -199,6 +199,13 @@ public sealed class DemoShell : SyncScript
                 VoxelGridDemo.PassEnabled = !VoxelGridDemo.PassEnabled;
             if (Input.IsKeyPressed(Keys.B))
                 VoxelGridDemo.Smooth = !VoxelGridDemo.Smooth;
+            if (Input.IsKeyPressed(Keys.C))
+                VoxelGridDemo.CycleColliderForm();
+
+            // Both on screen at once, because the whole point of being able to change them is to see
+            // where the drawn body and the solid one agree and where they do not.
+            DebugText.Print($"drawn:    {VoxelGridDemo.SurfaceName}", new Int2(16, 160));
+            DebugText.Print($"collider: {VoxelGridDemo.ColliderForm}", new Int2(16, 180));
         }
 
         // A demo never has to be guessed at: its keys are on screen while it runs.

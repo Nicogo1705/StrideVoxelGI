@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using Stride.BepuPhysics;
+using Stride.BepuPhysics.Definitions.Colliders;
 using Stride.Core.Mathematics;
 using Stride.Engine;
 using Stride.Input;
@@ -25,7 +27,7 @@ namespace Demo;
 public sealed class VoxelDigger : SyncScript
 {
     /// <summary>Radius of the sphere added or removed, in world units.</summary>
-    public float Radius { get; set; } = 1.1f;
+    public float Radius { get; set; } = 1.6f;
 
     /// <summary>How far the aim reaches.</summary>
     public float Reach { get; set; } = 80f;
@@ -39,9 +41,17 @@ public sealed class VoxelDigger : SyncScript
     /// </summary>
     public int AutoDigAfterFrames { get; set; }
 
+    private readonly List<HitInfo> hits = [];
+    private VoxelLaser? laser;
+    private string status = "nothing";
     private float cooldown;
     private int frame;
     private bool autoDug;
+
+    public override void Start()
+    {
+        laser = new VoxelLaser(GraphicsDevice, SceneSystem.SceneInstance.RootScene);
+    }
 
     public override void Update()
     {
@@ -62,12 +72,7 @@ public sealed class VoxelDigger : SyncScript
 
         cooldown -= (float)Game.UpdateTime.Elapsed.TotalSeconds;
 
-        var dig = Input.IsMouseButtonDown(MouseButton.Left);
-        var fill = Input.IsKeyDown(Keys.F);
-        if ((!dig && !fill) || cooldown > 0f)
-            return;
-
-        cooldown = Interval;
+        DebugText.Print($"aim: {status}", new Int2(16, 140));
 
         var simulation = Entity.GetSimulation();
         if (simulation is null)
@@ -80,11 +85,35 @@ public sealed class VoxelDigger : SyncScript
             Entity.Transform.WorldMatrix.M32,
             Entity.Transform.WorldMatrix.M33));
 
-        if (!simulation.RayCast(origin, forward, Reach, out var hit))
+        // Every hit along the ray, not just the first: the balls resting on the terrain are hit
+        // before it is, and digging where a ball happens to be does nothing at all - which is what
+        // a tool that works only half the time feels like.
+        hits.Clear();
+        simulation.RayCastPenetrating(origin, forward, Reach, hits);
+
+        HitInfo? terrain = null;
+        foreach (var candidate in hits)
+        {
+            if (candidate.Collidable.Collider is not VoxelCollider)
+                continue;
+            if (terrain is null || candidate.Distance < terrain.Value.Distance)
+                terrain = candidate;
+        }
+
+        // The beam is drawn every frame, button or no button: a tool that misses and a tool that
+        // fires nowhere feel identical until the ray itself is on screen.
+        status = terrain is { } aimed
+            ? $"terrain at {aimed.Distance:0.0} m"
+            : hits.Count > 0 ? "something else in the way" : "nothing";
+        laser?.Aim(origin, forward, terrain?.Distance ?? Reach, terrain?.Point);
+
+        var dig = Input.IsMouseButtonDown(MouseButton.Left);
+        var fill = Input.IsKeyDown(Keys.F);
+        if ((!dig && !fill) || cooldown > 0f || terrain is not { } hit)
             return;
 
-        // Filling reaches back along the ray, so material is added onto the surface rather than
-        // inside it - digging one cell deep and filling one cell out are not the same point.
+        cooldown = Interval;
+
         var centre = hit.Point + (fill ? hit.Normal * (Radius * 0.6f) : Vector3.Zero);
         VoxelGridDemo.Edit(Game, centre, Radius, fill);
     }
