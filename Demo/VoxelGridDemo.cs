@@ -27,8 +27,19 @@ namespace Demo;
 /// </remarks>
 public static class VoxelGridDemo
 {
-    public const int Samples = 65;
-    public const float CellSize = 0.25f;
+    /// <summary>
+    /// Samples along each axis, and the world size of one cell. Both settable, because the pair is
+    /// the whole cost model and it is worth being able to move it from the command line.
+    /// </summary>
+    /// <remarks>
+    /// A dense grid is cubic in its resolution: making the terrain ten times finer <em>and</em> ten
+    /// times wider is a thousandfold in both memory and traversal, which 65 turns into 6401 - some
+    /// 262 billion samples, a petabyte of buffer. Nothing about the collider or the traced renderer
+    /// forbids it; a single dense array is what forbids it. Past a few hundred a side the answer is
+    /// several grids side by side, each its own entity, which both of them already support.
+    /// </remarks>
+    public static int Samples = 129;
+    public static float CellSize = 0.125f;
     public const float IsoLevel = 0.5f;
 
     public static float Extent => (Samples - 1) * CellSize;
@@ -304,7 +315,9 @@ public static class VoxelGridDemo
                 },
                 CellSize = CellSize,
                 IsoLevel = IsoLevel,
-                MaxSteps = 512,
+                // Long enough to cross the grid corner to corner, whatever it was sized at: a walk
+                // that runs out of steps stops mid-field and punches a hole in the surface.
+                MaxSteps = Samples * 3 + 64,
                 Surface = StartSurface,
             },
             World = Matrix.Identity,

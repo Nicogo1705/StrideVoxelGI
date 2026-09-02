@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Globalization;
 using System.Linq;
 using Demo;
 using Demo.Shell;
@@ -224,6 +225,14 @@ game.Script.AddTask(async () =>
         "sn" => VoxelChildForm.TriangleSurfaceNets,
         _ => VoxelChildForm.TriangleMarchingCubes,
     };
+    // The grid's size and resolution, because the pair is the whole cost model of a dense field and
+    // it is worth being able to move it without a rebuild. Cubic in the sample count: 129 is eight
+    // times the field 65 is, not twice.
+    if (int.TryParse(Option("--samples"), out var samples) && samples > 1)
+        VoxelGridDemo.Samples = samples;
+    if (float.TryParse(Option("--cell"), NumberStyles.Float, CultureInfo.InvariantCulture, out var cell) && cell > 0)
+        VoxelGridDemo.CellSize = cell;
+
     VoxelGridDemo.StartWithWireframe = args.Contains("--wireframe");
     VoxelGridDemo.StartWithTrace = !args.Contains("--no-trace");
 
