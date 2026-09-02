@@ -238,6 +238,7 @@ game.Script.AddTask(async () =>
             StartWith = requested,
             Profiler = profiler,
             ShotDirectory = Option("--shot"),
+            AutoBackAfterFrames = ParseInt(Option("--auto-back"), 0),
             Tour = tour,
         },
     });

@@ -72,6 +72,14 @@ public sealed class DemoShell : SyncScript
     // build in the very frame that emptied the scene. One tick of delay makes the gap real.
     private int pendingDelay;
 
+    /// <summary>
+    /// Leaves the running demo after this many frames, for a run nobody is sitting at. Zero waits
+    /// for the key.
+    /// </summary>
+    public int AutoBackAfterFrames { get; set; }
+
+    private int framesInDemo;
+
     private Stride.Rendering.Images.PostProcessingEffects? postEffects;
     private bool defaultLensFlare, defaultLightStreak, defaultLocalReflections;
     private float defaultBloomAmount, defaultBloomRadius;
@@ -161,6 +169,12 @@ public sealed class DemoShell : SyncScript
                 BuildMenu();
             }
 
+            return;
+        }
+
+        if (AutoBackAfterFrames > 0 && running is not null && ++framesInDemo == AutoBackAfterFrames)
+        {
+            ShowMenu();
             return;
         }
 
