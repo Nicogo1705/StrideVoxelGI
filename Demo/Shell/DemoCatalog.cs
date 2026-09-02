@@ -50,7 +50,7 @@ public static class DemoCatalog
         new DemoEntry(
             "Voxel grid",
             "A field traced cell by cell instead of meshed, collided against without triangles.",
-            ["F1  menu      F2  profiler (off / fps / cpu / gpu)      N  next page", "Right mouse + WASD  fly", "V  traced grid on/off", "B  smooth surface / cubes", "F11  collider wireframe"],
+            ["F1  menu      F2  profiler (off / fps / cpu / gpu)      N  next page", "Right mouse + WASD  fly", "Left mouse  dig      F  fill", "V  traced grid on/off", "B  smooth surface / cubes", "F11  collider wireframe"],
             DemoScenes.BuildVoxelGrid),
     ];
 }

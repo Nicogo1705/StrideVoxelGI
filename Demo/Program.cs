@@ -208,6 +208,9 @@ game.Script.AddTask(async () =>
 
     // The traced voxel pass joins the compositor now, switched off: adding a renderer once a frame
     // is in flight modifies the list being walked to draw it.
+    if (args.Contains("--dig"))
+        VoxelGridDemo.AutoDigAfterFrames = 200;
+
     VoxelGridDemo.InstallPass(game);
 
     // Screen space reflections read a normals buffer that only a scene with meshes produces, and the

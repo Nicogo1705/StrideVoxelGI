@@ -84,10 +84,87 @@ public static class VoxelGridDemo
     /// <summary>Widens the samples for the structured buffer the packed source reads.</summary>
     public static GraphicsBuffer CreateBuffer(GraphicsDevice device, ushort[] samples)
     {
-        var widened = new uint[samples.Length];
+        gpuSamples = new uint[samples.Length];
         for (int i = 0; i < samples.Length; ++i)
-            widened[i] = samples[i];
-        return GraphicsBuffer.Structured.New(device, widened, false);
+            gpuSamples[i] = samples[i];
+        return gpuBuffer = GraphicsBuffer.Structured.New(device, gpuSamples, false);
+    }
+
+    /// <summary>
+    /// Adds or removes a ball of material, and that is the whole of a terrain edit.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// One write per sample, into the array the renderer reads and into the collider, which reads
+    /// the field on demand. Nothing is re-meshed, no tree is rebuilt, no collidable is re-created,
+    /// and the bounds do not change - so the hole is solid on the same frame it is visible.
+    /// </para>
+    /// <para>
+    /// The whole buffer goes back to the GPU here, which a real game would not do: it would upload
+    /// the touched region, or hold the field in a 3D texture and write the box. At a megabyte a
+    /// stroke it is not what this demo is trying to show.
+    /// </para>
+    /// </remarks>
+    public static void Edit(IGame game, Vector3 centre, float radius, bool fill)
+    {
+        if (cachedSamples is null || gpuSamples is null || gpuBuffer is null || collider is null)
+            return;
+
+        // Sample coordinates are cell coordinates: sample (x, y, z) sits at x * CellSize.
+        var inverse = 1f / CellSize;
+        var lo = centre - new Vector3(radius);
+        var hi = centre + new Vector3(radius);
+
+        var x0 = Math.Max(0, (int)MathF.Floor(lo.X * inverse));
+        var y0 = Math.Max(0, (int)MathF.Floor(lo.Y * inverse));
+        var z0 = Math.Max(0, (int)MathF.Floor(lo.Z * inverse));
+        var x1 = Math.Min(Samples - 1, (int)MathF.Ceiling(hi.X * inverse));
+        var y1 = Math.Min(Samples - 1, (int)MathF.Ceiling(hi.Y * inverse));
+        var z1 = Math.Min(Samples - 1, (int)MathF.Ceiling(hi.Z * inverse));
+
+        var touched = false;
+
+        for (int x = x0; x <= x1; ++x)
+        {
+            for (int y = y0; y <= y1; ++y)
+            {
+                for (int z = z0; z <= z1; ++z)
+                {
+                    var offset = new Vector3(x, y, z) * CellSize - centre;
+                    var distance = offset.Length();
+                    if (distance > radius)
+                        continue;
+
+                    // A soft edge rather than a hard one: the surface is an interpolation of these
+                    // samples, so a ball cut with a step in it comes out with a step in it.
+                    var strength = 1f - distance / radius;
+                    var index = (x * Samples + y) * Samples + z;
+                    var previous = cachedSamples[index];
+                    var density = previous & 0xFF;
+                    var material = previous & 0xFF00;
+
+                    var target = fill
+                        ? (int)MathF.Round(MathUtil.Lerp(density, 255f, strength))
+                        : (int)MathF.Round(MathUtil.Lerp(density, 0f, strength));
+                    target = Math.Clamp(target, 0, 255);
+                    if (target == density)
+                        continue;
+
+                    // Filling empty space needs a material, or the new matter is drawn as air was.
+                    if (fill && material == 0)
+                        material = 2 << 8;
+
+                    var packed = (ushort)(target | material);
+                    cachedSamples[index] = packed;
+                    gpuSamples[index] = packed;
+                    collider.SetVoxel(x, y, z, packed);
+                    touched = true;
+                }
+            }
+        }
+
+        if (touched)
+            gpuBuffer.SetData(game.GraphicsContext.CommandList, gpuSamples);
     }
 
     /// <summary>Whether the traced pass draws. Owned by the shell, since the pass outlives the scene.</summary>
@@ -108,6 +185,13 @@ public static class VoxelGridDemo
 
     private static ushort[]? cachedSamples;
     private static bool passInstalled;
+
+    private static uint[]? gpuSamples;
+    private static GraphicsBuffer? gpuBuffer;
+    private static VoxelCollider? collider;
+
+    /// <summary>Scaffolding: carve a fixed trench after this many frames, for an unattended capture.</summary>
+    public static int AutoDigAfterFrames { get; set; }
 
     /// <summary>
     /// Puts the traced pass in the compositor, switched off. Called once, before the game loop.
@@ -157,7 +241,7 @@ public static class VoxelGridDemo
     private static void BuildScene(Game game, Scene scene, Entity camera, ushort[] samples)
     {
         // -- the same field, collided against ------------------------------------------------
-        var collider = new VoxelCollider
+        collider = new VoxelCollider
         {
             Form = VoxelChildForm.TriangleSurfaceNets,
             CellSize = CellSize,
@@ -200,6 +284,7 @@ public static class VoxelGridDemo
         camera.Transform.Position = new Vector3(Extent * 0.5f, Extent * 0.75f, -Extent * 0.35f);
         camera.Transform.Rotation = Quaternion.RotationYawPitchRoll(MathUtil.Pi, -0.45f, 0);
         camera.Add(new BasicCameraController());
+        camera.Add(new VoxelDigger { AutoDigAfterFrames = AutoDigAfterFrames });
     }
 
     /// <summary>
