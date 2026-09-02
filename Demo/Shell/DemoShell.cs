@@ -192,22 +192,6 @@ public sealed class DemoShell : SyncScript
             return;
         }
 
-        // The traced pass is a compositor object rather than a script, so its key lives here.
-        if (running == DemoCatalog.VoxelGrid)
-        {
-            if (Input.IsKeyPressed(Keys.V))
-                VoxelGridDemo.PassEnabled = !VoxelGridDemo.PassEnabled;
-            if (Input.IsKeyPressed(Keys.B))
-                VoxelGridDemo.Smooth = !VoxelGridDemo.Smooth;
-            if (Input.IsKeyPressed(Keys.C))
-                VoxelGridDemo.CycleColliderForm();
-
-            // Both on screen at once, because the whole point of being able to change them is to see
-            // where the drawn body and the solid one agree and where they do not.
-            DebugText.Print($"drawn:    {VoxelGridDemo.SurfaceName}", new Int2(16, 160));
-            DebugText.Print($"collider: {VoxelGridDemo.ColliderForm}", new Int2(16, 180));
-        }
-
         // A demo never has to be guessed at: its keys are on screen while it runs.
         var y = 16;
         foreach (var line in DemoCatalog.Entries[running.Value].Controls)
@@ -215,6 +199,26 @@ public sealed class DemoShell : SyncScript
             DebugText.Print(line, new Int2(16, y));
             y += 20;
         }
+
+        // The traced pass is a compositor object rather than a script, so its key lives here.
+        if (running == DemoCatalog.VoxelGrid)
+        {
+            if (Input.IsKeyPressed(Keys.V))
+                VoxelGridDemo.PassEnabled = !VoxelGridDemo.PassEnabled;
+            if (Input.IsKeyPressed(Keys.B))
+                VoxelGridDemo.CycleSurface();
+            if (Input.IsKeyPressed(Keys.C))
+                VoxelGridDemo.CycleColliderForm();
+            if (Input.IsKeyPressed(Keys.X))
+                VoxelGridDemo.MatchColliderToSurface();
+
+            // Both on screen at once, because the whole point of being able to change them is to see
+            // where the drawn body and the solid one agree and where they do not.
+            DebugText.Print($"drawn    [B] : {VoxelGridDemo.Surface}", new Int2(16, y));
+            DebugText.Print($"collider [C] : {VoxelGridDemo.ColliderForm}", new Int2(16, y + 20));
+            y += 44;
+        }
+
     }
 
     private void UpdateProfilerInput()

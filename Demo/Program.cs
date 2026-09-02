@@ -2,6 +2,7 @@
 using System.Linq;
 using Demo;
 using Demo.Shell;
+using Stride.Rendering.Voxels.Grid;
 using Demo.Gallery;
 using Stride.Core.Mathematics;
 using Stride.Engine;
@@ -208,6 +209,13 @@ game.Script.AddTask(async () =>
 
     // The traced voxel pass joins the compositor now, switched off: adding a renderer once a frame
     // is in flight modifies the list being walked to draw it.
+    VoxelGridDemo.StartSurface = Option("--surface") switch
+    {
+        "cubes" => VoxelSurfaceForm.Cubes,
+        "sn" => VoxelSurfaceForm.SurfaceNets,
+        _ => VoxelSurfaceForm.MarchingCubes,
+    };
+
     if (args.Contains("--dig"))
         VoxelGridDemo.AutoDigAfterFrames = 200;
 

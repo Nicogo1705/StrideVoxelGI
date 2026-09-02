@@ -66,9 +66,15 @@ public static class VoxelGridDemo
                     var arch = Saturate((1.1f - ring.Length()) * 1.2f);
 
                     var density = MathF.Max(ground, MathF.Max(sphere, arch));
+                    // Decided with a margin, not on equality. Where two of the three shapes have
+                    // almost the same value - which is a whole shell around every intersection -
+                    // comparing them directly flips from one cell to the next on nothing but the
+                    // last decimal. The smooth surfaces blend that away; cubes show one colour per
+                    // cell, so it appears as speckle exactly where two materials meet.
+                    const float margin = 0.05f;
                     var material = density <= 0f ? 0
-                                 : arch >= sphere && arch >= ground ? 3
-                                 : sphere >= ground ? 2
+                                 : arch > sphere + margin && arch > ground + margin ? 3
+                                 : sphere > ground + margin ? 2
                                  : 1;
 
                     var index = (x * Samples + y) * Samples + z;
@@ -182,28 +188,32 @@ public static class VoxelGridDemo
     /// <summary>Whether the traced pass draws. Owned by the shell, since the pass outlives the scene.</summary>
     private static VoxelGridTraversalDDA? traversal;
 
-    /// <summary>
-    /// What the traced pass stops on: the cells themselves, or the crossing on the trilinear field -
-    /// which is the surface marching cubes meshes. Both walk the same cells.
-    /// </summary>
-    public static bool Smooth
+    /// <summary>Surface to start on, from --surface. Lets an unattended capture photograph any of them.</summary>
+    public static VoxelSurfaceForm StartSurface { get; set; } = VoxelSurfaceForm.MarchingCubes;
+
+    /// <summary>Which surface the traced pass stops on.</summary>
+    public static VoxelSurfaceForm Surface
     {
-        get => traversal?.Smooth ?? true;
-        set { if (traversal is not null) traversal.Smooth = value; }
+        get => traversal?.Surface ?? VoxelSurfaceForm.MarchingCubes;
+        set { if (traversal is not null) traversal.Surface = value; }
     }
 
-    /// <summary>Name of the surface the traced pass is drawing, for the readout.</summary>
-    public static string SurfaceName => Smooth ? "iso-surface (marching cubes)" : "cubes";
+    /// <summary>Steps to the next drawn surface.</summary>
+    public static void CycleSurface() => Surface = Surface switch
+    {
+        VoxelSurfaceForm.Cubes => VoxelSurfaceForm.MarchingCubes,
+        VoxelSurfaceForm.MarchingCubes => VoxelSurfaceForm.SurfaceNets,
+        _ => VoxelSurfaceForm.Cubes,
+    };
 
     /// <summary>
-    /// What the collider presents to the narrow phase, cycled through the four forms.
+    /// What the collider presents to the narrow phase.
     /// </summary>
     /// <remarks>
-    /// Worth pairing deliberately rather than leaving on a default. Cubes drawn against a box
-    /// collider agree exactly; the traced iso-surface agrees with marching cubes, whose vertices sit
-    /// on the same crossings. Surface nets averages those crossings into one vertex per cell, so it
-    /// follows the drawn surface at a distance of a fraction of a cell rather than being it - which
-    /// is visible as soon as both are on screen at once.
+    /// Worth pairing deliberately with <see cref="Surface"/>. Cubes against a box collider agree
+    /// exactly, and so do the two marching-cubes forms; surface nets is a third surface, and pairing
+    /// it with either of the others draws one body and collides with another - which is visible the
+    /// moment both are on screen at once.
     /// </remarks>
     public static VoxelChildForm ColliderForm
     {
@@ -211,14 +221,23 @@ public static class VoxelGridDemo
         set { if (collider is not null) collider.Form = value; }
     }
 
-    /// <summary>Steps to the next collider form.</summary>
+    /// <summary>Steps to the next collider form, through the three that have a drawn counterpart.</summary>
     public static void CycleColliderForm() => ColliderForm = ColliderForm switch
     {
-        VoxelChildForm.Box => VoxelChildForm.Sphere,
-        VoxelChildForm.Sphere => VoxelChildForm.TriangleMarchingCubes,
+        VoxelChildForm.Box => VoxelChildForm.TriangleMarchingCubes,
         VoxelChildForm.TriangleMarchingCubes => VoxelChildForm.TriangleSurfaceNets,
+        VoxelChildForm.TriangleSurfaceNets => VoxelChildForm.Sphere,
         _ => VoxelChildForm.Box,
     };
+
+    /// <summary>Sets both to the pair that describes the same body.</summary>
+    public static void MatchColliderToSurface() => ColliderForm = Surface switch
+    {
+        VoxelSurfaceForm.Cubes => VoxelChildForm.Box,
+        VoxelSurfaceForm.SurfaceNets => VoxelChildForm.TriangleSurfaceNets,
+        _ => VoxelChildForm.TriangleMarchingCubes,
+    };
+
 
     public static bool PassEnabled
     {
@@ -274,6 +293,7 @@ public static class VoxelGridDemo
                 CellSize = CellSize,
                 IsoLevel = IsoLevel,
                 MaxSteps = 512,
+                Surface = StartSurface,
             },
             World = Matrix.Identity,
             MaxDistance = 200f,
