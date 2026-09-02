@@ -23,10 +23,10 @@ public sealed class AutoShot : SyncScript
     public string Directory { get; set; } = "Shots";
 
     /// <summary>Frames to let the game load, compile its shaders and settle before the first shot.</summary>
-    public int WarmupFrames { get; set; } = 260;
+    public int WarmupFrames { get; set; } = 110;
 
     /// <summary>Frames between shots, so the pose has been drawn before it is read back.</summary>
-    public int FramesBetween { get; set; } = 12;
+    public int FramesBetween { get; set; } = 8;
 
     /// <summary>Prefix for the file names.</summary>
     public string Prefix { get; set; } = "shot";

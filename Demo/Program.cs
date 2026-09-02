@@ -3,6 +3,7 @@ using System.Linq;
 using Demo;
 using Demo.Shell;
 using Stride.Rendering.Voxels.Grid;
+using Stride.BepuPhysics.Definitions.Colliders.Voxels;
 using Demo.Gallery;
 using Stride.Core.Mathematics;
 using Stride.Engine;
@@ -215,6 +216,16 @@ game.Script.AddTask(async () =>
         "sn" => VoxelSurfaceForm.SurfaceNets,
         _ => VoxelSurfaceForm.MarchingCubes,
     };
+
+    VoxelGridDemo.StartColliderForm = Option("--collider") switch
+    {
+        "box" => VoxelChildForm.Box,
+        "sphere" => VoxelChildForm.Sphere,
+        "sn" => VoxelChildForm.TriangleSurfaceNets,
+        _ => VoxelChildForm.TriangleMarchingCubes,
+    };
+    VoxelGridDemo.StartWithWireframe = args.Contains("--wireframe");
+    VoxelGridDemo.StartWithTrace = !args.Contains("--no-trace");
 
     if (args.Contains("--dig"))
         VoxelGridDemo.AutoDigAfterFrames = 200;

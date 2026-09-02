@@ -188,8 +188,20 @@ public static class VoxelGridDemo
     /// <summary>Whether the traced pass draws. Owned by the shell, since the pass outlives the scene.</summary>
     private static VoxelGridTraversalDDA? traversal;
 
+    /// <summary>Collider form to start on, from --collider.</summary>
+    public static VoxelChildForm StartColliderForm { get; set; } = VoxelChildForm.TriangleMarchingCubes;
+
+    /// <summary>Draw the traced pass at all, from --no-trace. Off reveals what it covers.</summary>
+    public static bool StartWithTrace { get; set; } = true;
+
+    /// <summary>Show the collider wireframe from the first frame, from --wireframe.</summary>
+    public static bool StartWithWireframe { get; set; }
+
     /// <summary>Surface to start on, from --surface. Lets an unattended capture photograph any of them.</summary>
     public static VoxelSurfaceForm StartSurface { get; set; } = VoxelSurfaceForm.MarchingCubes;
+
+    /// <summary>What the digging tool is pointing at, shown by the shell with everything else.</summary>
+    public static string AimStatus { get; set; } = "nothing";
 
     /// <summary>Which surface the traced pass stops on.</summary>
     public static VoxelSurfaceForm Surface
@@ -313,7 +325,7 @@ public static class VoxelGridDemo
             // trilinear field the renderer solves puts the surface. Surface nets averages those
             // crossings into one vertex per cell - a deliberate smoothing of the same surface, and
             // therefore a surface that follows the drawn one at a distance rather than being it.
-            Form = VoxelChildForm.TriangleMarchingCubes,
+            Form = StartColliderForm,
             CellSize = CellSize,
             IsoLevel = IsoLevel,
 
@@ -340,7 +352,7 @@ public static class VoxelGridDemo
 
         // F11 draws every collidable as wireframe - which for the terrain means the collider's own
         // AppendModel, so this is also the test of that.
-        scene.Entities.Add(new Entity("VoxelDebug") { new DebugRenderComponent { Visible = false } });
+        scene.Entities.Add(new Entity("VoxelDebug") { new DebugRenderComponent { Visible = StartWithWireframe } });
 
         // -- camera ---------------------------------------------------------------------------
         // The shell's camera, moved and given flight controls. Creating one here would put a second

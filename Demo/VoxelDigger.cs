@@ -72,7 +72,9 @@ public sealed class VoxelDigger : SyncScript
 
         cooldown -= (float)Game.UpdateTime.Elapsed.TotalSeconds;
 
-        DebugText.Print($"aim: {status}", new Int2(16, 140));
+        // The shell owns the top of the screen and lays its lines out one after another; a fixed
+        // position here lands on top of whichever line happens to be there.
+        VoxelGridDemo.AimStatus = status;
 
         var simulation = Entity.GetSimulation();
         if (simulation is null)

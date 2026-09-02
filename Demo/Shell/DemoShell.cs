@@ -216,7 +216,8 @@ public sealed class DemoShell : SyncScript
             // where the drawn body and the solid one agree and where they do not.
             DebugText.Print($"drawn    [B] : {VoxelGridDemo.Surface}", new Int2(16, y));
             DebugText.Print($"collider [C] : {VoxelGridDemo.ColliderForm}", new Int2(16, y + 20));
-            y += 44;
+            DebugText.Print($"aim          : {VoxelGridDemo.AimStatus}", new Int2(16, y + 40));
+            y += 64;
         }
 
     }
@@ -297,7 +298,7 @@ public sealed class DemoShell : SyncScript
 
         // The traced grid is a compositor pass rather than an entity, so it is switched here rather
         // than torn down with the scene.
-        VoxelGridDemo.PassEnabled = index == DemoCatalog.VoxelGrid;
+        VoxelGridDemo.PassEnabled = index == DemoCatalog.VoxelGrid && VoxelGridDemo.StartWithTrace;
 
         pendingDemo = index;
         pendingDelay = 1;
