@@ -280,6 +280,9 @@ public static class VoxelGridDemo
         gpuBuffer.SetData(game.GraphicsContext.CommandList, gpuSamples);
         UploadTexture(game.GraphicsContext.CommandList);
 
+        // The pyramid over the box the brush touched, and nothing outside it.
+        occupancy?.Update(game.GraphicsContext.CommandList, ReadDensity, new Int3(x0, y0, z0), new Int3(x1, y1, z1));
+
         // Physics already sees the edit; this is for anything that kept a copy of the surface, which
         // here is the F11 wireframe. Cheap on this collider - a shape slot swap, no tree rebuilt.
         collider.NotifyFieldChanged();
@@ -381,6 +384,13 @@ public static class VoxelGridDemo
     private static GraphicsBuffer? gpuBuffer;
     private static VoxelCollider? collider;
 
+    /// <summary>The min/max pyramid both traversals skip empty space on. One field, one pyramid.</summary>
+    private static VoxelGridOccupancy? occupancy;
+
+    /// <summary>Density of one sample as the pyramid reads it, from the CPU copy of the field.</summary>
+    private static float ReadDensity(int x, int y, int z)
+        => (cachedSamples![(x * Samples + y) * Samples + z] & 0xFF) / 255f;
+
     /// <summary>Scaffolding: carve a fixed trench after this many frames, for an unattended capture.</summary>
     public static int AutoDigAfterFrames { get; set; }
 
@@ -436,6 +446,15 @@ public static class VoxelGridDemo
 
     private static void BuildScene(Game game, Scene scene, Entity camera, ushort[] samples)
     {
+        // The pyramid outlives the scene as the pass does, and both traversals read the same one.
+        if (occupancy is null)
+        {
+            occupancy = new VoxelGridOccupancy(game.GraphicsDevice, new Int3(Samples, Samples, Samples));
+            occupancy.Update(game.GraphicsContext.CommandList, ReadDensity);
+            if (traversal is not null)
+                traversal.Occupancy = occupancy;
+        }
+
         // -- the same field, collided against ------------------------------------------------
         collider = new VoxelCollider
         {
@@ -470,6 +489,7 @@ public static class VoxelGridDemo
         {
             Traversal = modelTraversal = new VoxelGridTraversalDDA
             {
+                Occupancy = occupancy,
                 Source = new VoxelGridSourceTexture3D
                 {
                     Texture = CreateTexture(game, samples),
