@@ -285,7 +285,7 @@ public static class VoxelGridDemo
         collider.NotifyFieldChanged();
     }
 
-    /// <summary>Whether the traced pass draws. Owned by the shell, since the pass outlives the scene.</summary>
+    /// <summary>The traced pass's traversal, over the packed buffer. Outlives the scene, as the pass does.</summary>
     private static VoxelGridTraversalDDA? traversal;
 
     /// <summary>The model's own traversal, over the texture copy of the field. Follows every switch.</summary>
@@ -294,10 +294,11 @@ public static class VoxelGridDemo
     /// <summary>Collider form to start on, from --collider.</summary>
     public static VoxelChildForm StartColliderForm { get; set; } = VoxelChildForm.TriangleMarchingCubes;
 
-    /// <summary>Draw the traced pass at all, from --no-trace. Off reveals what it covers.</summary>
-    public static bool StartWithModel = true;
+    /// <summary>Draw the grid as a model, off with --no-model so the traced pass can be judged alone.</summary>
+    public static bool StartWithModel { get; set; } = true;
 
-    public static bool StartWithTrace { get; set; } = true;
+    /// <summary>Start with the traced pass on, from --trace. Both paths draw the same surface, so off by default.</summary>
+    public static bool StartWithTrace { get; set; }
 
     /// <summary>Show the collider wireframe from the first frame, from --wireframe.</summary>
     public static bool StartWithWireframe { get; set; }
@@ -361,7 +362,7 @@ public static class VoxelGridDemo
         _ => VoxelChildForm.TriangleMarchingCubes,
     };
 
-
+    /// <summary>Whether the traced pass draws. Owned by the shell, since the pass outlives the scene.</summary>
     public static bool PassEnabled
     {
         get => VoxelGridPass.Enabled;
@@ -435,15 +436,10 @@ public static class VoxelGridDemo
         // -- the same field, collided against ------------------------------------------------
         collider = new VoxelCollider
         {
-            // Marching cubes rather than surface nets, so the collision surface is the one that is
-            // drawn: its vertices sit exactly on the crossings along cell edges, which is where the
-            // trilinear field the renderer solves puts the surface. Surface nets averages those
-            // crossings into one vertex per cell - a deliberate smoothing of the same surface, and
-            // therefore a surface that follows the drawn one at a distance rather than being it.
+            // Matched to the drawn surface by default; X keeps them matched, C lets them differ.
             Form = StartColliderForm,
             CellSize = CellSize,
             IsoLevel = IsoLevel,
-
         };
         collider.SetData(Samples, Samples, Samples, samples);
 
