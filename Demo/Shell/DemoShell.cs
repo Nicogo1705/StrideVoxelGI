@@ -275,13 +275,15 @@ public sealed class DemoShell : SyncScript
                 VoxelGridDemo.CastShadows = !VoxelGridDemo.CastShadows;
             if (Input.IsKeyPressed(Keys.G) && !Input.IsKeyDown(Keys.LeftCtrl) && !Input.IsKeyDown(Keys.RightCtrl))
                 VoxelGridDemo.ToggleGI();
+            if (Input.IsKeyPressed(Keys.L))
+                VoxelGridDemo.LightsEnabled = !VoxelGridDemo.LightsEnabled;
 
             // Both on screen at once, because the whole point of being able to change them is to see
             // where the drawn body and the solid one agree and where they do not.
             DebugText.Print($"drawn    [B] : {VoxelGridDemo.Surface}", new Int2(16, y));
             DebugText.Print($"collider [C] : {VoxelGridDemo.ColliderForm}", new Int2(16, y + LineHeight));
             DebugText.Print($"aim          : {VoxelGridDemo.AimStatus}", new Int2(16, y + LineHeight * 2));
-            DebugText.Print($"shadows  [O] : {(VoxelGridDemo.CastShadows ? "cast" : "not cast")}      voxel GI [G] : {(VoxelGridDemo.GIEnabled ? "around the camera" : "off")}", new Int2(16, y + LineHeight * 3));
+            DebugText.Print($"shadows  [O] : {(VoxelGridDemo.CastShadows ? "cast" : "not cast")}      voxel GI [G] : {(VoxelGridDemo.GIEnabled ? "around the camera" : "off")}      lights [L] : {(VoxelGridDemo.LightsEnabled ? "sun and ambient" : "the arch alone")}", new Int2(16, y + LineHeight * 3));
         }
 
     }

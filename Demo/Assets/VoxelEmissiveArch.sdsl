@@ -1,0 +1,16 @@
+namespace Demo
+{
+    /// The arch emits, and nothing else does: decided on the albedo the traversal found, since
+    /// the field carries a colour per sample and no other tag. The match is soft, so the blend
+    /// between materials at the arch's foot glows a little rather than cutting.
+    shader VoxelEmissiveArch : ComputeColor, MaterialPixelStream
+    {
+        override float4 Compute()
+        {
+            float3 albedo = streams.matColorBase.rgb;
+            float3 arch = float3(1.0, 0.0, 0.876);
+            float match = 1.0 - saturate(distance(albedo, arch) / 0.35);
+            return float4(albedo * match * 8.0, 1.0);
+        }
+    };
+}

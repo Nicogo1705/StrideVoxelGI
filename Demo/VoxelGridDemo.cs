@@ -325,6 +325,18 @@ public static class VoxelGridDemo
     /// <summary>Start with the GI volume around the camera, from --gi.</summary>
     public static bool StartWithGI { get; set; }
 
+    /// <summary>Start with the sun and the ambient off, from --gi-only, so the field is lit by what it emits.</summary>
+    public static bool StartWithLights { get; set; } = true;
+
+    private static readonly List<LightComponent> sceneLights = [];
+
+    /// <summary>Whether the scene's own lights - the sun and the ambient - are on.</summary>
+    public static bool LightsEnabled
+    {
+        get => sceneLights.Count > 0 && sceneLights[0].Enabled;
+        set { foreach (var light in sceneLights) light.Enabled = value; }
+    }
+
     private static VoxelGridComponent? grid;
     private static Entity? giVolume;
     private static Entity? cameraEntity;
@@ -581,6 +593,9 @@ public static class VoxelGridDemo
             },
             CastShadows = StartWithShadows,
             DebugView = DebugView,
+            // The arch emits; with the sun and the ambient off it is the only light there is, and
+            // with a GI volume around the camera it lights the field it stands on.
+            Emissive = new ComputeShaderClassColor { MixinReference = "VoxelEmissiveArch" },
         });
 
         // -- a light, because the drawn grid now needs one ------------------------------------
@@ -612,14 +627,21 @@ public static class VoxelGridDemo
         sun.Transform.Rotation = Quaternion.RotationYawPitchRoll(0.9f, -0.85f, 0);
         scene.Entities.Add(sun);
 
-        scene.Entities.Add(new Entity("Ambient")
+        var ambient = new Entity("Ambient")
         {
             new LightComponent
             {
                 Type = new LightAmbient { Color = new ColorRgbProvider(new Color3(0.30f, 0.34f, 0.42f)) },
                 Intensity = 1f,
             },
-        });
+        };
+        scene.Entities.Add(ambient);
+
+        // Both on one switch, so the field can be seen lit by nothing but what it emits.
+        sceneLights.Clear();
+        sceneLights.Add(sun.Get<LightComponent>());
+        sceneLights.Add(ambient.Get<LightComponent>());
+        LightsEnabled = StartWithLights;
 
         // -- an ordinary mesh, standing half inside the volume ---------------------------------
         // The test of the whole thing. If the voxel surface is a surface like any other, this sphere
