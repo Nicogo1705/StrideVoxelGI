@@ -44,9 +44,13 @@ public static class DemoScenes
 
         // The overlay's keys under Ctrl, as the gallery has them, so a letter means the same thing
         // in every demo: the asset was authored with bare letters, which is the layout the
-        // package documents, and the shell is where the demos are made to agree.
+        // package documents, and the shell is where the demos are made to agree. Its screenshot
+        // is the shell's Ctrl+S now, so the overlay's own is off rather than saving twice.
         foreach (var debug in cornellBox.Entities.SelectMany(entity => entity.Components.OfType<VoxelGIDebug>()))
+        {
             debug.RequireControl = true;
+            debug.ScreenshotKey = Stride.Input.Keys.None;
+        }
 
         camera.Add(new BasicCameraController());
     }

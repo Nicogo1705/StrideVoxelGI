@@ -54,12 +54,13 @@ public sealed class DemoShell : SyncScript
     /// <summary>Profiler page to open at startup, from --profiler.</summary>
     public VoxelGIProfilerPage Profiler { get; set; } = VoxelGIProfilerPage.Off;
 
-    /// <summary>Saves what is on screen, in any demo.</summary>
+    /// <summary>Saves what is on screen, with Ctrl held, in any demo.</summary>
     /// <remarks>
-    /// The voxel GI overlay has Ctrl+S, but only the demos that run the overlay have it; this one
-    /// is the shell's, so it is there in every demo and lands in the same folder.
+    /// Ctrl+S, the chord the voxel GI overlay taught - but the overlay only exists in the demos
+    /// that run it, so the key is the shell's now and the overlay's own copy is switched off
+    /// where the scene is built. Under Ctrl so it stays clear of S, which flies the camera back.
     /// </remarks>
-    public Keys ScreenshotKey { get; set; } = Keys.F5;
+    public Keys ScreenshotKey { get; set; } = Keys.S;
 
     /// <summary>Where <see cref="ScreenshotKey"/> puts its files. Relative paths resolve next to the executable.</summary>
     public string ScreenshotDirectory { get; set; } = "Screenshots";
@@ -228,7 +229,7 @@ public sealed class DemoShell : SyncScript
             return;
         }
 
-        if (Input.IsKeyPressed(ScreenshotKey))
+        if ((Input.IsKeyDown(Keys.LeftCtrl) || Input.IsKeyDown(Keys.RightCtrl)) && Input.IsKeyPressed(ScreenshotKey))
             TakeScreenshot();
 
         // Along the bottom, not the top, and the whole list: every key a demo answers to is here,

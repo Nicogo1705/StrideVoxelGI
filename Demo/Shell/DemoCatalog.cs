@@ -37,7 +37,7 @@ public static class DemoCatalog
     /// The shell's own tools, the same in every demo. Listed first so the eye finds them in the
     /// same place whatever is running.
     /// </summary>
-    private const string ShellTools = "F1  menu      F2  profiler (off / fps / cpu / gpu)      F3  next page      F4  post: bloom / AA      F5  screenshot";
+    private const string ShellTools = "F1  menu      F2  profiler (off / fps / cpu / gpu)      F3  next page      F4  post: bloom / AA      Ctrl+S  screenshot";
 
     /// <summary>The flight controls, shared by every demo that is flown rather than walked.</summary>
     private const string Flight = "Right mouse  look      WASD / ZQSD  fly      E / Space  up      C  down      Shift  fast";

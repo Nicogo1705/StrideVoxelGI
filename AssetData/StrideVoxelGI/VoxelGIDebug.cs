@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Nicogo. Distributed under the MIT license.
+// Copyright (c) 2026 Nicogo. Distributed under the MIT license.
 using System;
 using System.IO;
 using Stride.Core;
@@ -512,7 +512,9 @@ public class VoxelGIDebug : SyncScript
         Print($"[{Pair(RawMipKey)}] Raw mip    : {target.DebugMipmap}{(target.DebugView == VoxelGIDebugView.Raw ? "" : "  (raw view only)")}");
         Print($"[{Pair(CycleProfilerKey)}] Profiler   : {profilerPage}");
         Print($"[{Chord(ProfilerPageKey)}] Profiler page : {(profilerPage == VoxelGIProfilerPage.Off ? "- (profiler off)" : "next, +Shift first")}");
-        Print($"[Ctrl+{ScreenshotKey}] Screenshot  : {screenshotStatus}");
+        // A host that saves screenshots itself sets the key to None, and the line goes with it.
+        if (ScreenshotKey != Keys.None)
+            Print($"[Ctrl+{ScreenshotKey}] Screenshot  : {screenshotStatus}");
         Print("");
         Print("    +- : the key alone lowers it, with Shift raises it");
     }

@@ -292,6 +292,8 @@ public static class GalleryScene
         {
             OverlayPosition = new Int2(16, 16),
             RequireControl = true,
+            // The shell saves on Ctrl+S in every demo; the overlay's own would save a second file.
+            ScreenshotKey = Stride.Input.Keys.None,
             FollowCandidate = visitor.Transform,
         });
 
