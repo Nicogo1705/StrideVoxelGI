@@ -1,4 +1,4 @@
-﻿using Stride.Core.Mathematics;
+using Stride.Core.Mathematics;
 using Stride.Engine;
 using Stride.Engine.Processors;
 using Stride.Rendering.Colors;
@@ -142,12 +142,9 @@ public static class GalleryScene
             Lantern = lantern,
         });
 
+        // The post effects switch and the key list are the shell's, the same in every demo; the
+        // hall's own chain is set once, in CalmThePostChain, and the switch works on top of it.
         visitor.Add(new GalleryHud());
-
-        // No PostEffectsToggle here. It exists to bisect a screen artefact in the Cornell box by
-        // switching the bloom off while the artefact is on screen; in the hall its readout lands on
-        // top of the volume line and its key is one more thing to explain, for a switch a visitor
-        // has no use for. The gallery's post chain is set once, in CalmThePostChain.
 
         return visitor;
     }

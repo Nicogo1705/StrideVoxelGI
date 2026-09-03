@@ -24,6 +24,7 @@ using StrideVoxelGI;
 //   --warmup=N             seconds to let the game load and compile before the first stop (default 5)
 //   --dump-gi              also save the reduced-resolution GI buffer at each stop
 //   --gallery              walk a hall of twenty exhibits instead of the Cornell box
+//   --cornell              open the Cornell box straight away, like --gallery and --voxelgrid
 //   --rdc                  ask RenderDoc to capture the frame each stop is shot on
 //   --volume=N             resize the voxel volume, in world units
 //   --levels=N             clipmap rings to ask for
@@ -206,6 +207,7 @@ game.Script.AddTask(async () =>
     // flow it always had.
     var requested = args.Contains("--gallery") ? DemoCatalog.Gallery
                   : args.Contains("--voxelgrid") ? DemoCatalog.VoxelGrid
+                  : args.Contains("--cornell") ? DemoCatalog.CornellBox
                   : capture || profiler != VoxelGIProfilerPage.Off ? DemoCatalog.CornellBox
                   : (int?)null;
 

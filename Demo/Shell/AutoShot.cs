@@ -112,29 +112,39 @@ public sealed class AutoShot : SyncScript
     {
         try
         {
-            var directory = Path.IsPathRooted(Directory) ? Directory : Path.Combine(AppContext.BaseDirectory, Directory);
-            System.IO.Directory.CreateDirectory(directory);
-            var path = Path.Combine(directory, $"{Prefix}-{name}.png");
-
-            using var image = GraphicsDevice.Presenter.BackBuffer.GetDataAsImage(((Game)Game).GraphicsContext.CommandList);
-
-            // The back buffer's alpha is whatever the last pass left there; PNG keeps it, and the
-            // capture then opens washed out over white.
-            var pixels = image.PixelBuffer[0];
-            if (pixels.PixelSize == 4)
-            {
-                var bytes = pixels.GetPixels<byte>();
-                for (int i = 3; i < bytes.Length; i += 4)
-                    bytes[i] = byte.MaxValue;
-                pixels.SetPixels(bytes);
-            }
-
-            using var stream = File.Create(path);
-            image.Save(stream, ImageFileType.Png);
+            SaveBackBuffer((Game)Game, Directory, $"{Prefix}-{name}.png");
         }
         catch (Exception exception)
         {
             Log.Error($"Could not save a shot: {exception.Message}");
         }
+    }
+
+    /// <summary>
+    /// Writes what is on screen to a PNG and returns its path. Relative directories resolve next to
+    /// the executable.
+    /// </summary>
+    public static string SaveBackBuffer(Game game, string directory, string fileName)
+    {
+        var resolved = Path.IsPathRooted(directory) ? directory : Path.Combine(AppContext.BaseDirectory, directory);
+        System.IO.Directory.CreateDirectory(resolved);
+        var path = Path.Combine(resolved, fileName);
+
+        using var image = game.GraphicsDevice.Presenter.BackBuffer.GetDataAsImage(game.GraphicsContext.CommandList);
+
+        // The back buffer's alpha is whatever the last pass left there; PNG keeps it, and the
+        // capture then opens washed out over white.
+        var pixels = image.PixelBuffer[0];
+        if (pixels.PixelSize == 4)
+        {
+            var bytes = pixels.GetPixels<byte>();
+            for (int i = 3; i < bytes.Length; i += 4)
+                bytes[i] = byte.MaxValue;
+            pixels.SetPixels(bytes);
+        }
+
+        using var stream = File.Create(path);
+        image.Save(stream, ImageFileType.Png);
+        return path;
     }
 }

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Stride.Core.Mathematics;
@@ -22,44 +22,12 @@ public class GalleryHud : SyncScript
     /// <summary>How close the visitor has to stand for the plaque to be readable.</summary>
     public float ReadingDistance { get; set; } = 3.4f;
 
-    /// <summary>The controls, drawn in the far corner for as long as the hall is open.</summary>
-    /// <remarks>
-    /// Kept on screen rather than shown once at the door: a visitor who missed the opening card has
-    /// no other way to find out that there is a lamp to switch on, and a line of grey text in a
-    /// corner costs the room nothing.
-    /// </remarks>
-    private static readonly string[] Controls =
-    {
-        "ZQSD / WASD    walk",
-        "Arrows         walk too",
-        "Shift          run",
-        "Space          jump",
-        "L              the ball of light",
-        "G              ghost mode",
-        "E              work the case",
-        "Tab            free the mouse",
-        "Esc / F1       back to the menu",
-        "Ctrl + key     GI settings",
-    };
-
-    /// <summary>Width of one character of the engine's debug font, in pixels.</summary>
-    private const int Glyph = 8;
-
-    /// <summary>Shown under the controls only while the ghost is out, since the keys only work then.</summary>
-    private static readonly string[] GhostControls =
-    {
-        "GHOST          the walls are gone",
-        "Space / C      rise / sink",
-    };
-
     private readonly List<GalleryExhibit> exhibits = new();
-    private GalleryPlayer? player;
     private float openingCard = 7f;
 
     public override void Start()
     {
         Collect(SceneSystem.SceneInstance?.RootScene);
-        player = Entity.Get<GalleryPlayer>();
     }
 
     public override void Update()
@@ -75,14 +43,14 @@ public class GalleryHud : SyncScript
         var size = GraphicsDevice.Presenter.BackBuffer;
         var centre = new Int2(size.Width / 2, size.Height / 2);
 
-        DrawControls(size.Width);
-
+        // The keys are the shell's list, along the bottom like every other demo's; the card only
+        // says where to look.
         if (openingCard > 0)
         {
             openingCard -= (float)Game.UpdateTime.Elapsed.TotalSeconds;
             DebugText.Print("THE CABINET OF LIGHTS", new Int2(centre.X - 130, 120));
             DebugText.Print("twenty pieces on what light does when nobody is looking at it", new Int2(centre.X - 300, 148));
-            DebugText.Print("mouse to look around - the rest of the controls are in the top right corner", new Int2(centre.X - 300, 176));
+            DebugText.Print("mouse to look around - the rest of the controls are in the bottom left corner", new Int2(centre.X - 300, 176));
         }
 
         if (nearest is null)
@@ -149,35 +117,6 @@ public class GalleryHud : SyncScript
         foreach (var spec in seen.Take(4))
         {
             DebugText.Print(spec.ToString(), new Int2(centre.X - 220, y));
-            y += 18;
-        }
-    }
-
-    /// <summary>Right-aligned against the edge of the back buffer, whatever it is.</summary>
-    private void DrawControls(int width)
-    {
-        // Measured over both blocks, so the column does not jump sideways when the ghost lines
-        // appear under it.
-        var longest = 0;
-        foreach (var control in Controls.Concat(GhostControls))
-            longest = Math.Max(longest, control.Length);
-
-        var x = width - longest * Glyph - 16;
-        var y = 16;
-
-        foreach (var control in Controls)
-        {
-            DebugText.Print(control, new Int2(x, y));
-            y += 18;
-        }
-
-        if (player?.Ghosting != true)
-            return;
-
-        y += 9;
-        foreach (var control in GhostControls)
-        {
-            DebugText.Print(control, new Int2(x, y));
             y += 18;
         }
     }

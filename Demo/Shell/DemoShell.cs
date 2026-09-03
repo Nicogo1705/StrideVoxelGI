@@ -54,6 +54,20 @@ public sealed class DemoShell : SyncScript
     /// <summary>Profiler page to open at startup, from --profiler.</summary>
     public VoxelGIProfilerPage Profiler { get; set; } = VoxelGIProfilerPage.Off;
 
+    /// <summary>Saves what is on screen, in any demo.</summary>
+    /// <remarks>
+    /// The voxel GI overlay has Ctrl+S, but only the demos that run the overlay have it; this one
+    /// is the shell's, so it is there in every demo and lands in the same folder.
+    /// </remarks>
+    public Keys ScreenshotKey { get; set; } = Keys.F5;
+
+    /// <summary>Where <see cref="ScreenshotKey"/> puts its files. Relative paths resolve next to the executable.</summary>
+    public string ScreenshotDirectory { get; set; } = "Screenshots";
+
+    /// <summary>What the last screenshot came to, shown for a few seconds under the key list.</summary>
+    private string? screenshotStatus;
+    private float screenshotStatusLeft;
+
     /// <summary>Where to save an automatic set of shots, from --shot. Null takes none.</summary>
     public string? ShotDirectory { get; set; }
 
@@ -214,20 +228,34 @@ public sealed class DemoShell : SyncScript
             return;
         }
 
-        // Along the bottom, not the top.
+        if (Input.IsKeyPressed(ScreenshotKey))
+            TakeScreenshot();
+
+        // Along the bottom, not the top, and the whole list: every key a demo answers to is here,
+        // in the same place in every demo, with the shell's own tools on the first line.
         //
         // Two of the three demos run the voxel GI package, which draws its own list of settings down
         // the top left corner. Printing here as well put two overlays through each other, both
         // unreadable. The bottom is empty in every scene, and staying out of the way is cheaper than
         // asking each scene where it has room.
         var lines = DemoCatalog.Entries[running.Value].Controls;
-        var extra = running == DemoCatalog.VoxelGrid ? 3 : 0;
+        var extra = (running == DemoCatalog.VoxelGrid ? 3 : 0) + (screenshotStatus is null ? 0 : 1);
         var y = ScreenHeight - 16 - (lines.Length + extra) * LineHeight;
 
         foreach (var line in lines)
         {
             DebugText.Print(line, new Int2(16, y));
             y += LineHeight;
+        }
+
+        if (screenshotStatus is not null)
+        {
+            DebugText.Print(screenshotStatus, new Int2(16, y));
+            y += LineHeight;
+
+            screenshotStatusLeft -= (float)Game.UpdateTime.Elapsed.TotalSeconds;
+            if (screenshotStatusLeft <= 0)
+                screenshotStatus = null;
         }
 
         // The traced pass is a compositor object rather than a script, so its key lives here.
@@ -249,6 +277,22 @@ public sealed class DemoShell : SyncScript
             DebugText.Print($"aim          : {VoxelGridDemo.AimStatus}", new Int2(16, y + LineHeight * 2));
         }
 
+    }
+
+    private void TakeScreenshot()
+    {
+        try
+        {
+            var name = DemoCatalog.Entries[running!.Value].Name.Replace(' ', '-').ToLowerInvariant();
+            var path = AutoShot.SaveBackBuffer(HostGame, ScreenshotDirectory, $"{name}-{DateTime.Now:yyyyMMdd-HHmmss}.png");
+            screenshotStatus = $"saved {path}";
+        }
+        catch (Exception exception)
+        {
+            screenshotStatus = $"screenshot failed: {exception.Message}";
+        }
+
+        screenshotStatusLeft = 4f;
     }
 
     private void UpdateProfilerInput()
@@ -339,6 +383,10 @@ public sealed class DemoShell : SyncScript
 
         DemoCatalog.Entries[index].Build(HostGame, menuCameraEntity);
 
+        // The shell's tools that ride the camera, the same in every demo. The camera is cleared
+        // with the rest of the scene on the way out, so they are mounted again with the next one.
+        menuCameraEntity.Add(new PostEffectsToggle());
+
         if (ShotDirectory is not null)
             MountShooter(index);
 
@@ -401,8 +449,12 @@ public sealed class DemoShell : SyncScript
         }
         else
         {
-            var from = FindActiveCamera().Transform.Position;
-            shooter.Poses.Add((from, from + Vector3.UnitZ, "default"));
+            // Where the demo put its camera, looking where the demo pointed it: the Cornell box is
+            // open on one side, and a fixed direction looked out of it at nothing.
+            var transform = FindActiveCamera().Transform;
+            var from = transform.Position;
+            var forward = Vector3.Transform(-Vector3.UnitZ, transform.Rotation);
+            shooter.Poses.Add((from, from + forward, "default"));
         }
 
         Entity.Add(shooter);

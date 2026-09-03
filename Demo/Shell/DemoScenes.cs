@@ -1,5 +1,6 @@
 using System.Linq;
 using Stride.Engine;
+using StrideVoxelGI;
 
 namespace Demo.Shell;
 
@@ -41,8 +42,13 @@ public static class DemoScenes
             }
         }
 
+        // The overlay's keys under Ctrl, as the gallery has them, so a letter means the same thing
+        // in every demo: the asset was authored with bare letters, which is the layout the
+        // package documents, and the shell is where the demos are made to agree.
+        foreach (var debug in cornellBox.Entities.SelectMany(entity => entity.Components.OfType<VoxelGIDebug>()))
+            debug.RequireControl = true;
+
         camera.Add(new BasicCameraController());
-        camera.Add(new PostEffectsToggle());
     }
 
     public static void BuildGallery(Game game, Entity camera) => Gallery.GalleryScene.Build(game, camera);

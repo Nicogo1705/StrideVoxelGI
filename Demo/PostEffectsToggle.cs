@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using Stride.Engine;
 using Stride.Input;
 using Stride.Rendering.Compositing;
@@ -12,7 +12,8 @@ namespace Demo;
 /// <remarks>
 /// An artefact that only appears from certain viewpoints cannot be chased by reasoning about
 /// shaders: the question "is this the bloom chain or not" is answered by switching the bloom chain
-/// off while the artefact is on screen, and nothing else answers it as directly.
+/// off while the artefact is on screen, and nothing else answers it as directly. The shell mounts
+/// it on the camera of every demo, so the same key answers the same question wherever it is asked.
 /// </remarks>
 public class PostEffectsToggle : SyncScript
 {
