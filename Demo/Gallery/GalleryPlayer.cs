@@ -113,9 +113,10 @@ public class GalleryPlayer : SyncScript
     {
         var dt = (float)Game.UpdateTime.Elapsed.TotalSeconds;
 
-        // Escape hands the mouse back, a click takes it again: a gallery is not a shooter, and the
-        // cursor has to be reachable to close the window.
-        if (Input.IsKeyPressed(Keys.Escape))
+        // Tab hands the mouse back, a click takes it again: a gallery is not a shooter, and the
+        // cursor has to be reachable to close the window. Not Escape - that is the shell's way back
+        // to the menu, and one key doing both left the scene every time the mouse was wanted.
+        if (Input.IsKeyPressed(Keys.Tab))
             Capture(false);
         else if (!looking && Input.IsMouseButtonPressed(MouseButton.Left))
             Capture(true);

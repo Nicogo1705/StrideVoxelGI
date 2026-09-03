@@ -17,7 +17,11 @@ namespace Demo;
 public class PostEffectsToggle : SyncScript
 {
     /// <summary>Cycles: everything on, bloom off, antialiasing off, both off.</summary>
-    public Keys CycleKey { get; set; } = Keys.B;
+    /// <remarks>
+    /// F4, beside the shell's own function keys. B, which this had, is the voxel GI overlay's bounce
+    /// key in the Cornell box, so one press changed both.
+    /// </remarks>
+    public Keys CycleKey { get; set; } = Keys.F4;
 
     /// <summary>Require Ctrl, so the key does not collide with walking.</summary>
     public bool RequireControl { get; set; }
@@ -46,7 +50,13 @@ public class PostEffectsToggle : SyncScript
                 antialiasing.Enabled = state is 0 or 1;
         }
 
-        DebugText.Print($"[{CycleKey}] Post          : bloom {(effects.Bloom.Enabled ? "on " : "off")}  antialiasing {(effects.Antialiasing?.Enabled == true ? "on" : "off")}", new Stride.Core.Mathematics.Int2(16, 232));
+        // Bottom right, which no scene uses. Printed at a fixed spot in the top left column it sat
+        // on the voxel GI overlay's own lines, and the two read as one garbled line.
+        var line = $"[{CycleKey}] Post : bloom {(effects.Bloom.Enabled ? "on" : "off")}, antialiasing {(effects.Antialiasing?.Enabled == true ? "on" : "off")}";
+        var back = GraphicsDevice.Presenter?.BackBuffer;
+        var width = back?.Width ?? 1920;
+        var height = back?.Height ?? 1080;
+        DebugText.Print(line, new Stride.Core.Mathematics.Int2(width - 16 - line.Length * 8, height - 36));
     }
 
     /// <summary>

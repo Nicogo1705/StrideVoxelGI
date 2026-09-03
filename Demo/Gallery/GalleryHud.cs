@@ -37,7 +37,8 @@ public class GalleryHud : SyncScript
         "L              the ball of light",
         "G              ghost mode",
         "E              work the case",
-        "Esc            free the mouse",
+        "Tab            free the mouse",
+        "Esc / F1       back to the menu",
         "Ctrl + key     GI settings",
     };
 
