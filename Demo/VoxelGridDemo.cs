@@ -288,6 +288,9 @@ public static class VoxelGridDemo
     /// <summary>Whether the traced pass draws. Owned by the shell, since the pass outlives the scene.</summary>
     private static VoxelGridTraversalDDA? traversal;
 
+    /// <summary>The model's own traversal, over the texture copy of the field. Follows every switch.</summary>
+    private static VoxelGridTraversalDDA? modelTraversal;
+
     /// <summary>Collider form to start on, from --collider.</summary>
     public static VoxelChildForm StartColliderForm { get; set; } = VoxelChildForm.TriangleMarchingCubes;
 
@@ -309,7 +312,13 @@ public static class VoxelGridDemo
     public static VoxelSurfaceForm Surface
     {
         get => traversal?.Surface ?? VoxelSurfaceForm.MarchingCubes;
-        set { if (traversal is not null) traversal.Surface = value; }
+        set
+        {
+            // Both paths, or B changes the traced pass and leaves the model where it was - which
+            // reads as the model ignoring the key rather than as a second traversal nobody told.
+            if (traversal is not null) traversal.Surface = value;
+            if (modelTraversal is not null) modelTraversal.Surface = value;
+        }
     }
 
     /// <summary>Steps to the next drawn surface.</summary>
@@ -460,7 +469,7 @@ public static class VoxelGridDemo
         if (StartWithModel)
         terrain.Add(new VoxelGridComponent
         {
-            Traversal = new VoxelGridTraversalDDA
+            Traversal = modelTraversal = new VoxelGridTraversalDDA
             {
                 Source = new VoxelGridSourceTexture3D
                 {
