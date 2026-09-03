@@ -244,6 +244,10 @@ game.Script.AddTask(async () =>
     // seeing them disagree is the point of being able to.
     VoxelGridDemo.StartWithTrace = args.Contains("--trace");
 
+    // The two switches that decide what the frame costs, so a capture can measure either way.
+    VoxelGridDemo.StartWithShadows = !args.Contains("--no-shadows");
+    VoxelGridDemo.StartWithGI = args.Contains("--gi");
+
     // --no-model leaves the grid out of the mesh path, so the traced pass can be judged on its own.
     VoxelGridDemo.StartWithModel = !args.Contains("--no-model");
     if (float.TryParse(Environment.GetEnvironmentVariable("STRIDE_VOXEL_DEBUG"), NumberStyles.Float, CultureInfo.InvariantCulture, out var debugView))

@@ -73,6 +73,8 @@ public static class DemoCatalog
                 "Left mouse  dig      F  fill      F11  collider wireframe",
                 "V  the traced pass, over the model      B  drawn: cubes / MC / SN",
                 "C  collider: box / MC / SN / sphere      X  match the collider to what is drawn",
+                "O  the grid casts shadows      G  a voxel GI volume around the camera",
+                GISettings,
             ],
             DemoScenes.BuildVoxelGrid),
     ];

@@ -42,16 +42,10 @@ public sealed class VoxelDigger : SyncScript
     public int AutoDigAfterFrames { get; set; }
 
     private readonly List<HitInfo> hits = [];
-    private VoxelLaser? laser;
     private string status = "nothing";
     private float cooldown;
     private int frame;
     private bool autoDug;
-
-    public override void Start()
-    {
-        laser = new VoxelLaser(GraphicsDevice, SceneSystem.SceneInstance.RootScene);
-    }
 
     public override void Update()
     {
@@ -102,12 +96,10 @@ public sealed class VoxelDigger : SyncScript
                 terrain = candidate;
         }
 
-        // The beam is drawn every frame, button or no button: a tool that misses and a tool that
-        // fires nowhere feel identical until the ray itself is on screen.
+        // The aim is the reticle at the centre of the screen; what it lands on is said in words.
         status = terrain is { } aimed
             ? $"terrain at {aimed.Distance:0.0} m"
             : hits.Count > 0 ? "something else in the way" : "nothing";
-        laser?.Aim(origin, forward, terrain?.Distance ?? Reach, terrain?.Point);
 
         var dig = Input.IsMouseButtonDown(MouseButton.Left);
         var fill = Input.IsKeyDown(Keys.F);

@@ -184,6 +184,7 @@ public sealed class DemoShell : SyncScript
             ShowMenu();
     }
 
+
     public override void Update()
     {
         if (pendingDemo is not null || pendingMenu)
@@ -240,7 +241,7 @@ public sealed class DemoShell : SyncScript
         // unreadable. The bottom is empty in every scene, and staying out of the way is cheaper than
         // asking each scene where it has room.
         var lines = DemoCatalog.Entries[running.Value].Controls;
-        var extra = (running == DemoCatalog.VoxelGrid ? 3 : 0) + (screenshotStatus is null ? 0 : 1);
+        var extra = (running == DemoCatalog.VoxelGrid ? 4 : 0) + (screenshotStatus is null ? 0 : 1);
         var y = ScreenHeight - 16 - (lines.Length + extra) * LineHeight;
 
         foreach (var line in lines)
@@ -270,12 +271,17 @@ public sealed class DemoShell : SyncScript
                 VoxelGridDemo.CycleColliderForm();
             if (Input.IsKeyPressed(Keys.X))
                 VoxelGridDemo.MatchColliderToSurface();
+            if (Input.IsKeyPressed(Keys.O))
+                VoxelGridDemo.CastShadows = !VoxelGridDemo.CastShadows;
+            if (Input.IsKeyPressed(Keys.G) && !Input.IsKeyDown(Keys.LeftCtrl) && !Input.IsKeyDown(Keys.RightCtrl))
+                VoxelGridDemo.ToggleGI();
 
             // Both on screen at once, because the whole point of being able to change them is to see
             // where the drawn body and the solid one agree and where they do not.
             DebugText.Print($"drawn    [B] : {VoxelGridDemo.Surface}", new Int2(16, y));
             DebugText.Print($"collider [C] : {VoxelGridDemo.ColliderForm}", new Int2(16, y + LineHeight));
             DebugText.Print($"aim          : {VoxelGridDemo.AimStatus}", new Int2(16, y + LineHeight * 2));
+            DebugText.Print($"shadows  [O] : {(VoxelGridDemo.CastShadows ? "cast" : "not cast")}      voxel GI [G] : {(VoxelGridDemo.GIEnabled ? "around the camera" : "off")}", new Int2(16, y + LineHeight * 3));
         }
 
     }

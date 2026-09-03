@@ -14,6 +14,10 @@ using Stride.Input;
 using Stride.Rendering;
 using Stride.Rendering.Compositing;
 using Stride.Rendering.Voxels.Grid;
+using Stride.UI;
+using Stride.UI.Controls;
+using Stride.UI.Panels;
+using StrideVoxelGI;
 using Stride.Rendering.Colors;
 using Stride.Rendering.Lights;
 using Stride.Rendering.Materials;
@@ -315,6 +319,77 @@ public static class VoxelGridDemo
     /// <summary>What the digging tool is pointing at, shown by the shell with everything else.</summary>
     public static string AimStatus { get; set; } = "nothing";
 
+    /// <summary>Start without the grid casting shadows, from --no-shadows.</summary>
+    public static bool StartWithShadows { get; set; } = true;
+
+    /// <summary>Start with the GI volume around the camera, from --gi.</summary>
+    public static bool StartWithGI { get; set; }
+
+    private static VoxelGridComponent? grid;
+    private static Entity? giVolume;
+    private static Entity? cameraEntity;
+    private static Scene? currentScene;
+
+    /// <summary>
+    /// Whether the grid writes the shadow maps. It receives shadows either way.
+    /// </summary>
+    /// <remarks>
+    /// The one switch that matters to the frame: four cascades each walk the field again, and
+    /// together they cost more than the view does. A world lit by the GI volume instead has no use
+    /// for them.
+    /// </remarks>
+    public static bool CastShadows
+    {
+        get => grid?.CastShadows ?? StartWithShadows;
+        set { if (grid is not null) grid.CastShadows = value; }
+    }
+
+    /// <summary>Whether a voxel GI volume is following the camera.</summary>
+    public static bool GIEnabled => giVolume is not null;
+
+    /// <summary>
+    /// Puts a voxel GI volume around the camera, or takes it away.
+    /// </summary>
+    /// <remarks>
+    /// The volume is voxelized from what the renderer draws, and the grid is drawn as a model, so
+    /// the field lights itself through the same path a mesh would. A volume that follows the camera
+    /// is what an open world needs: the field can be any size, only the part around the camera is
+    /// lit indirectly, and the rest is not paid for.
+    /// </remarks>
+    public static void ToggleGI()
+    {
+        if (currentScene is null || cameraEntity is null)
+            return;
+
+        if (giVolume is not null)
+        {
+            currentScene.Entities.Remove(giVolume);
+            giVolume = null;
+            return;
+        }
+
+        giVolume = new Entity("Voxel GI");
+        giVolume.Transform.Position = cameraEntity.Transform.Position;
+        giVolume.Add(new VoxelGIVolume
+        {
+            // Twice the grid, so the finest ring - an eighth of it at four levels - is eight units
+            // across at the grid's own cell size, and the coarser rings still cover the whole field.
+            VolumeSize = Extent * 2f,
+            ClipMapLevels = 4,
+            Quality = VoxelGIQuality.High,
+            AutoFreeze = false,
+            Follow = cameraEntity.Transform,
+        });
+        giVolume.Add(new VoxelGIDebug
+        {
+            OverlayPosition = new Int2(16, 16),
+            RequireControl = true,
+            ScreenshotKey = Keys.None,
+            FollowCandidate = cameraEntity.Transform,
+        });
+        currentScene.Entities.Add(giVolume);
+    }
+
     /// <summary>Which surface the traced pass stops on.</summary>
     public static VoxelSurfaceForm Surface
     {
@@ -446,6 +521,10 @@ public static class VoxelGridDemo
 
     private static void BuildScene(Game game, Scene scene, Entity camera, ushort[] samples)
     {
+        currentScene = scene;
+        cameraEntity = camera;
+        giVolume = null;
+
         // The pyramid outlives the scene as the pass does, and both traversals read the same one.
         if (occupancy is null)
         {
@@ -485,7 +564,7 @@ public static class VoxelGridDemo
 
         // -- the same field, drawn the way a model is drawn -----------------------------------
         if (StartWithModel)
-        terrain.Add(new VoxelGridComponent
+        terrain.Add(grid = new VoxelGridComponent
         {
             Traversal = modelTraversal = new VoxelGridTraversalDDA
             {
@@ -500,7 +579,7 @@ public static class VoxelGridDemo
                 MaxSteps = Samples * 3 + 64,
                 Surface = StartSurface,
             },
-            CastShadows = true,
+            CastShadows = StartWithShadows,
             DebugView = DebugView,
         });
 
@@ -566,6 +645,42 @@ public static class VoxelGridDemo
         camera.Transform.Rotation = Quaternion.RotationYawPitchRoll(MathUtil.Pi, -0.45f, 0);
         camera.Add(new BasicCameraController());
         camera.Add(new VoxelDigger { AutoDigAfterFrames = AutoDigAfterFrames });
+
+        // The aim: a dot at the centre of the screen, in place of a beam drawn into the scene. A
+        // beam is a model, which the voxelizer and the shadow maps see as one more thing to draw;
+        // a dot in the UI costs nothing and is where every first-person tool puts its aim.
+        scene.Entities.Add(BuildReticle());
+
+        if (StartWithGI)
+            ToggleGI();
+    }
+
+    /// <summary>A small square, centred, on the UI layer the shell's menu also draws on.</summary>
+    private static Entity BuildReticle()
+    {
+        var dot = new Border
+        {
+            Width = 6,
+            Height = 6,
+            BorderThickness = new Thickness(3, 3, 3, 3),
+            BorderColor = new Color(1f, 1f, 1f, 0.85f),
+        };
+        dot.SetCanvasRelativePosition(new Vector3(0.5f, 0.5f, 0f));
+        dot.SetCanvasPinOrigin(new Vector3(0.5f, 0.5f, 0f));
+
+        var canvas = new Canvas();
+        canvas.Children.Add(dot);
+
+        return new Entity("Reticle")
+        {
+            new UIComponent
+            {
+                Page = new UIPage { RootElement = canvas },
+                IsFullScreen = true,
+                Resolution = new Vector3(1280, 720, 1000),
+                RenderGroup = RenderGroup.Group31,
+            },
+        };
     }
 
     /// <summary>A plain mesh, placed so it meets the voxel surface rather than sitting clear of it.</summary>
