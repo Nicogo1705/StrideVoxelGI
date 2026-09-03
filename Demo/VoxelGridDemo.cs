@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Linq;
 using Stride.BepuPhysics;
 using Stride.BepuPhysics.Debug;
 using Stride.BepuPhysics.Definitions.Colliders;
@@ -12,6 +14,11 @@ using Stride.Input;
 using Stride.Rendering;
 using Stride.Rendering.Compositing;
 using Stride.Rendering.Voxels.Grid;
+using Stride.Rendering.Colors;
+using Stride.Rendering.Lights;
+using Stride.Rendering.Materials;
+using Stride.Rendering.Materials.ComputeColors;
+using Stride.Rendering.ProceduralModels;
 using GraphicsBuffer = Stride.Graphics.Buffer;
 
 namespace Demo;
@@ -103,6 +110,80 @@ public static class VoxelGridDemo
 
     private static float Saturate(float value) => MathF.Max(0f, MathF.Min(1f, value));
 
+    /// <summary>
+    /// The same field again, as a 3D texture, for the material that draws it as a model.
+    /// </summary>
+    /// <remarks>
+    /// The traced pass reads a structured buffer, and that works because an image effect binds its
+    /// own resources. A material cannot: its resources go through the descriptor set the mesh render
+    /// feature builds, and a structured buffer set on a material pass is carried there and bound to
+    /// nothing - every density read comes back zero, so the ray crosses a field that is empty
+    /// everywhere and there is no surface to find. Nothing reports it; the buffer is present in the
+    /// material's parameters when asked. A texture is the resource a material does bind, which is
+    /// why the field goes down this path twice.
+    /// </remarks>
+    public static Texture CreateTexture(IGame game, ushort[] samples)
+    {
+        // Written in the texture's order, not the array's.
+        //
+        // The samples are indexed with z varying fastest; a 3D texture is laid out with x varying
+        // fastest. Copying one into the other straight through transposes the field, and a
+        // transposed field still draws - in bands, because along any ray the samples jump about -
+        // which reads as an artefact of the tracing rather than as the data being wrong.
+        gpuTexels = new byte[samples.Length * 4];
+        for (int x = 0; x < Samples; ++x)
+            for (int y = 0; y < Samples; ++y)
+                for (int z = 0; z < Samples; ++z)
+                    WriteTexel(gpuTexels, (z * Samples + y) * Samples + x, samples[(x * Samples + y) * Samples + z]);
+
+
+        // Created empty and filled afterwards, rather than handed its data here: a texture given its
+        // contents at creation is immutable, and the first dig then throws from inside SetData -
+        // far from the line that decided it.
+        gpuTexture = Texture.New3D(
+            game.GraphicsDevice, Samples, Samples, Samples, PixelFormat.R8G8B8A8_UNorm,
+            TextureFlags.ShaderResource, GraphicsResourceUsage.Default);
+        UploadTexture(game.GraphicsContext.CommandList);
+        return gpuTexture;
+    }
+
+    /// <summary>
+    /// Pushes the whole field to the GPU, the way a texture in default usage takes it.
+    /// </summary>
+    /// <remarks>
+    /// The whole field, because an edit is a ball and the array is contiguous in a different order
+    /// than the region would be. Small enough at this size that a partial update is not worth the
+    /// arithmetic; a game with real chunks would upload the box it touched.
+    /// </remarks>
+    private static void UploadTexture(CommandList commandList)
+    {
+        if (gpuTexture != null && gpuTexels != null)
+            gpuTexture.SetData(commandList, gpuTexels);
+    }
+
+    /// <summary>Density in red, the material's colour in the rest - what the texture source reads.</summary>
+    private static void WriteTexel(byte[] texels, int index, ushort packed)
+    {
+        var colour = MaterialColour(packed >> 8);
+        texels[index * 4 + 0] = (byte)(packed & 0xFF);
+        texels[index * 4 + 1] = (byte)(colour.X * 255f);
+        texels[index * 4 + 2] = (byte)(colour.Y * 255f);
+        texels[index * 4 + 3] = (byte)(colour.Z * 255f);
+    }
+
+    /// <summary>The palette the packed buffer's shader computes, worked out here instead.</summary>
+    private static Vector3 MaterialColour(int material)
+    {
+        if (material == 0)
+            return Vector3.Zero;
+
+        var hue = (material * 0.6180339887f) % 1f;
+        return new Vector3(
+            Saturate(MathF.Abs(((hue + 0.0000f) % 1f) * 6f - 3f) - 1f),
+            Saturate(MathF.Abs(((hue + 0.6666f) % 1f) * 6f - 3f) - 1f),
+            Saturate(MathF.Abs(((hue + 0.3333f) % 1f) * 6f - 3f) - 1f));
+    }
+
     /// <summary>Widens the samples for the structured buffer the packed source reads.</summary>
     public static GraphicsBuffer CreateBuffer(GraphicsDevice device, ushort[] samples)
     {
@@ -185,6 +266,8 @@ public static class VoxelGridDemo
                     var packed = (ushort)(target | material);
                     cachedSamples[index] = packed;
                     gpuSamples[index] = packed;
+                    if (gpuTexels != null)
+                        WriteTexel(gpuTexels, (z * Samples + y) * Samples + x, packed);
                     collider.SetVoxel(x, y, z, packed);
                     touched = true;
                 }
@@ -195,6 +278,7 @@ public static class VoxelGridDemo
             return;
 
         gpuBuffer.SetData(game.GraphicsContext.CommandList, gpuSamples);
+        UploadTexture(game.GraphicsContext.CommandList);
 
         // Physics already sees the edit; this is for anything that kept a copy of the surface, which
         // here is the F11 wireframe. Cheap on this collider - a shape slot swap, no tree rebuilt.
@@ -208,6 +292,8 @@ public static class VoxelGridDemo
     public static VoxelChildForm StartColliderForm { get; set; } = VoxelChildForm.TriangleMarchingCubes;
 
     /// <summary>Draw the traced pass at all, from --no-trace. Off reveals what it covers.</summary>
+    public static bool StartWithModel = true;
+
     public static bool StartWithTrace { get; set; } = true;
 
     /// <summary>Show the collider wireframe from the first frame, from --wireframe.</summary>
@@ -277,6 +363,8 @@ public static class VoxelGridDemo
     private static bool passInstalled;
 
     private static uint[]? gpuSamples;
+    private static byte[]? gpuTexels;
+    private static Texture? gpuTexture;
     private static GraphicsBuffer? gpuBuffer;
     private static VoxelCollider? collider;
 
@@ -368,6 +456,70 @@ public static class VoxelGridDemo
             scene.Entities.Add(body);
         }
 
+        // -- the same field, drawn the way a model is drawn -----------------------------------
+        if (StartWithModel)
+        terrain.Add(new VoxelGridComponent
+        {
+            Traversal = new VoxelGridTraversalDDA
+            {
+                Source = new VoxelGridSourceTexture3D
+                {
+                    Texture = CreateTexture(game, samples),
+                    SampleCount = new Int3(Samples, Samples, Samples),
+                },
+                CellSize = CellSize,
+                IsoLevel = IsoLevel,
+                MaxSteps = Samples * 3 + 64,
+                Surface = StartSurface,
+            },
+            CastShadows = true,
+        });
+
+        // -- a light, because the drawn grid now needs one ------------------------------------
+        // The traced pass lit itself from a direction it kept in its own parameters, which is exactly
+        // the sort of thing that stops a voxel from matching the scene around it. This one is the
+        // scene's light, and it lights both the grid and the mesh below.
+        var sun = new Entity("Sun")
+        {
+            new LightComponent
+            {
+                Type = new LightDirectional
+                {
+                    Color = new ColorRgbProvider(new Color3(1f, 0.95f, 0.85f)),
+                    Shadow =
+                    {
+                        Enabled = true,
+                        Size = LightShadowMapSize.Large,
+                        Filter = new LightShadowMapFilterTypePcf(),
+                        // More than the default. A surface found by a ray writes its own depth into
+                        // the shadow map, and at a grazing angle that depth sits within a cell of the
+                        // one the receiving lookup computes, so the surface shadows itself along a
+                        // sawtooth a cell wide. A mesh gets away with less because its rasterised
+                        // depth and its lookup agree to the last bit.
+                        BiasParameters = { DepthBias = 0.03f, NormalOffsetScale = 30f },
+                    },
+                },
+                Intensity = 12f,
+            },
+        };
+        sun.Transform.Rotation = Quaternion.RotationYawPitchRoll(0.9f, -0.85f, 0);
+        scene.Entities.Add(sun);
+
+        scene.Entities.Add(new Entity("Ambient")
+        {
+            new LightComponent
+            {
+                Type = new LightAmbient { Color = new ColorRgbProvider(new Color3(0.30f, 0.34f, 0.42f)) },
+                Intensity = 1f,
+            },
+        });
+
+        // -- an ordinary mesh, standing half inside the volume ---------------------------------
+        // The test of the whole thing. If the voxel surface is a surface like any other, this sphere
+        // is cut by it where it enters, is shadowed by it, and casts its own shadow onto it - with
+        // nothing written anywhere to make those three happen.
+        scene.Entities.Add(BuildReferenceMesh(game));
+
         // F11 draws every collidable as wireframe - which for the terrain means the collider's own
         // AppendModel, so this is also the test of that.
         scene.Entities.Add(new Entity("VoxelDebug") { new DebugRenderComponent { Visible = StartWithWireframe } });
@@ -386,6 +538,35 @@ public static class VoxelGridDemo
         camera.Transform.Rotation = Quaternion.RotationYawPitchRoll(MathUtil.Pi, -0.45f, 0);
         camera.Add(new BasicCameraController());
         camera.Add(new VoxelDigger { AutoDigAfterFrames = AutoDigAfterFrames });
+    }
+
+    /// <summary>A plain mesh, placed so it meets the voxel surface rather than sitting clear of it.</summary>
+    private static Entity BuildReferenceMesh(Game game)
+    {
+        var descriptor = new MaterialDescriptor
+        {
+            Attributes =
+            {
+                Diffuse = new MaterialDiffuseMapFeature(new ComputeColor(new Color4(0.85f, 0.45f, 0.25f, 1f))),
+                DiffuseModel = new MaterialDiffuseLambertModelFeature(),
+                Specular = new MaterialMetalnessMapFeature(new ComputeFloat(0f)),
+                SpecularModel = new MaterialSpecularMicrofacetModelFeature
+                {
+                    // The lookup table is a texture the pipeline binds for a material that came from
+                    // an asset; one built here at runtime has none, and metal reads as black.
+                    Environment = new MaterialSpecularMicrofacetEnvironmentGGXPolynomial(),
+                },
+                MicroSurface = new MaterialGlossinessMapFeature(new ComputeFloat(0.5f)),
+            },
+        };
+
+        var material = Material.New(game.GraphicsDevice, descriptor);
+        var sphere = new SphereProceduralModel { Radius = 2.2f, Tessellation = 32, MaterialInstance = { Material = material } };
+        var model = (Model)sphere.Generate(game.Services);
+
+        var entity = new Entity("ReferenceMesh") { new ModelComponent(model) { IsShadowCaster = true } };
+        entity.Transform.Position = new Vector3(Extent * 0.5f + 4.5f, Extent * 0.46f, Extent * 0.5f - 4.5f);
+        return entity;
     }
 
     /// <summary>

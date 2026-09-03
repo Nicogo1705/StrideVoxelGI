@@ -25,8 +25,33 @@ public sealed class AutoShot : SyncScript
     /// <summary>Frames to let the game load, compile its shaders and settle before the first shot.</summary>
     public int WarmupFrames { get; set; } = 110;
 
-    /// <summary>Frames between shots, so the pose has been drawn before it is read back.</summary>
-    public int FramesBetween { get; set; } = 8;
+    /// <summary>
+    /// Frames a pose is held before it is read back.
+    /// </summary>
+    /// <remarks>
+    /// A whole second, not a handful of frames. Moving the camera and reading the back buffer almost
+    /// immediately catches whatever was still settling - an effect that accumulates over frames, a
+    /// shader compiled on the frame it is first needed, a buffer uploaded at the end of the last
+    /// update - and the capture then reports a state the game is never actually in.
+    /// </remarks>
+    public int FramesBetween { get; set; } = 60;
+
+    /// <summary>Frames to keep running after the last shot, before quitting.</summary>
+    /// <remarks>
+    /// Long enough to look at. A run that quits the instant it has written its files leaves nothing
+    /// to check the files against.
+    /// </remarks>
+    public int TailFrames { get; set; } = 480;
+
+    /// <summary>
+    /// Whether the game quits once the last shot is saved.
+    /// </summary>
+    /// <remarks>
+    /// Off leaves the scene on screen with the camera on the last pose and control handed back,
+    /// which is how a capture that shows nothing gets checked against a pair of eyes: either the
+    /// scene is empty too, or the capture is lying about it.
+    /// </remarks>
+    public bool ExitWhenDone { get; set; } = true;
 
     /// <summary>Prefix for the file names.</summary>
     public string Prefix { get; set; } = "shot";
@@ -37,6 +62,7 @@ public sealed class AutoShot : SyncScript
     private int frame;
     private int posed;
     private int saved;
+    private int tail;
 
     public override void Update()
     {
@@ -57,7 +83,7 @@ public sealed class AutoShot : SyncScript
 
         if (posed >= Poses.Count)
         {
-            if (saved >= Poses.Count)
+            if (saved >= Poses.Count && ExitWhenDone && ++tail * FramesBetween >= TailFrames)
                 ((Game)Game).Exit();
             return;
         }

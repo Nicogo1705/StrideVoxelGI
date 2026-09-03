@@ -38,19 +38,19 @@ public static class DemoCatalog
         new DemoEntry(
             "Cornell box",
             "The reference scene: colour bleeding from two walls, and nothing else to explain it.",
-            ["F1  menu      F2  profiler (off / fps / cpu / gpu)      N  next page", "Right mouse + WASD  fly", "G  voxel debug views"],
+            ["F1  menu      F2  profiler (off / fps / cpu / gpu)      F3  next page", "Right mouse + WASD  fly", "G  voxel debug views"],
             DemoScenes.BuildCornellBox),
 
         new DemoEntry(
             "The cabinet of lights",
             "Twenty exhibits in one hall - the same bounce, asked to hold up at scale.",
-            ["F1  menu      F2  profiler (off / fps / cpu / gpu)      N  next page", "WASD  walk", "G  ghost mode", "L  the ball of light", "Tab  free the mouse"],
+            ["F1  menu      F2  profiler (off / fps / cpu / gpu)      F3  next page", "WASD  walk", "F  ghost mode", "L  the ball of light", "Tab  free the mouse"],
             DemoScenes.BuildGallery),
 
         new DemoEntry(
             "Voxel grid",
             "A field traced cell by cell instead of meshed, collided against without triangles.",
-            ["F1  menu      F2  profiler (off / fps / cpu / gpu)      N  next page", "Right mouse + WASD  fly", "Left mouse  dig      F  fill", "V  traced grid on/off", "B  drawn: cubes / MC / SN", "C  collider: box / MC / SN / sphere", "X  match the collider to what is drawn", "F11  collider wireframe"],
+            ["F1  menu      F2  profiler (off / fps / cpu / gpu)      F3  next page", "Right mouse + WASD  fly", "Left mouse  dig      F  fill", "V  the traced pass, over the model", "B  drawn: cubes / MC / SN", "C  collider: box / MC / SN / sphere", "X  match the collider to what is drawn", "F11  collider wireframe"],
             DemoScenes.BuildVoxelGrid),
     ];
 }

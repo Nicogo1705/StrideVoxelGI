@@ -42,13 +42,35 @@ public sealed class DemoShell : SyncScript
     public Keys ProfilerKey { get; set; } = Keys.F2;
 
     /// <summary>Next page of profiler results, when they do not fit on one.</summary>
-    public Keys ProfilerPageKey { get; set; } = Keys.N;
+    /// <summary>
+    /// Pages through the profiler.
+    /// </summary>
+    /// <remarks>
+    /// Not N. The voxel GI package binds N for its own paging, and two demos run it, so pressing N
+    /// there moved both at once.
+    /// </remarks>
+    public Keys ProfilerPageKey { get; set; } = Keys.F3;
 
     /// <summary>Profiler page to open at startup, from --profiler.</summary>
     public VoxelGIProfilerPage Profiler { get; set; } = VoxelGIProfilerPage.Off;
 
     /// <summary>Where to save an automatic set of shots, from --shot. Null takes none.</summary>
     public string? ShotDirectory { get; set; }
+
+    /// <summary>
+    /// Whether a capture run quits once its last shot is saved, or hands the scene back.
+    /// </summary>
+    /// <remarks>
+    /// Static because the argument is read before the shell exists. Leaving it on screen is how a
+    /// capture that shows nothing gets checked against a pair of eyes.
+    /// </remarks>
+    public static bool ExitAfterShots = true;
+
+    /// <summary>Height of one line of the on-screen key list.</summary>
+    private const int LineHeight = 20;
+
+    /// <summary>Where the bottom of the screen is, for a list that grows upwards from it.</summary>
+    private int ScreenHeight => GraphicsDevice.Presenter?.BackBuffer?.Height ?? 1080;
 
     /// <summary>The capture pass, if one was asked for. Rides whichever demo is opened.</summary>
     public CaptureTour? Tour { get; set; }
@@ -192,12 +214,20 @@ public sealed class DemoShell : SyncScript
             return;
         }
 
-        // A demo never has to be guessed at: its keys are on screen while it runs.
-        var y = 16;
-        foreach (var line in DemoCatalog.Entries[running.Value].Controls)
+        // Along the bottom, not the top.
+        //
+        // Two of the three demos run the voxel GI package, which draws its own list of settings down
+        // the top left corner. Printing here as well put two overlays through each other, both
+        // unreadable. The bottom is empty in every scene, and staying out of the way is cheaper than
+        // asking each scene where it has room.
+        var lines = DemoCatalog.Entries[running.Value].Controls;
+        var extra = running == DemoCatalog.VoxelGrid ? 3 : 0;
+        var y = ScreenHeight - 16 - (lines.Length + extra) * LineHeight;
+
+        foreach (var line in lines)
         {
             DebugText.Print(line, new Int2(16, y));
-            y += 20;
+            y += LineHeight;
         }
 
         // The traced pass is a compositor object rather than a script, so its key lives here.
@@ -215,9 +245,8 @@ public sealed class DemoShell : SyncScript
             // Both on screen at once, because the whole point of being able to change them is to see
             // where the drawn body and the solid one agree and where they do not.
             DebugText.Print($"drawn    [B] : {VoxelGridDemo.Surface}", new Int2(16, y));
-            DebugText.Print($"collider [C] : {VoxelGridDemo.ColliderForm}", new Int2(16, y + 20));
-            DebugText.Print($"aim          : {VoxelGridDemo.AimStatus}", new Int2(16, y + 40));
-            y += 64;
+            DebugText.Print($"collider [C] : {VoxelGridDemo.ColliderForm}", new Int2(16, y + LineHeight));
+            DebugText.Print($"aim          : {VoxelGridDemo.AimStatus}", new Int2(16, y + LineHeight * 2));
         }
 
     }
@@ -352,7 +381,7 @@ public sealed class DemoShell : SyncScript
     /// <summary>Adds the automatic capture, with viewpoints that suit the demo being shown.</summary>
     private void MountShooter(int index)
     {
-        var shooter = new AutoShot { Directory = ShotDirectory!, Prefix = $"demo{index}" };
+        var shooter = new AutoShot { Directory = ShotDirectory!, Prefix = $"demo{index}", ExitWhenDone = ExitAfterShots };
 
         if (index == DemoCatalog.VoxelGrid)
         {

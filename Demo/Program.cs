@@ -233,8 +233,17 @@ game.Script.AddTask(async () =>
     if (float.TryParse(Option("--cell"), NumberStyles.Float, CultureInfo.InvariantCulture, out var cell) && cell > 0)
         VoxelGridDemo.CellSize = cell;
 
+    DemoShell.ExitAfterShots = !args.Contains("--stay");
     VoxelGridDemo.StartWithWireframe = args.Contains("--wireframe");
-    VoxelGridDemo.StartWithTrace = !args.Contains("--no-trace");
+    // Off by default now that the grid draws as a model.
+    //
+    // Both paths draw the same field, and at nearly the same depth: run together they fight over
+    // every pixel of the surface and it comes out as speckle. V still turns the traced pass on, and
+    // seeing them disagree is the point of being able to.
+    VoxelGridDemo.StartWithTrace = args.Contains("--trace");
+
+    // --no-model leaves the grid out of the mesh path, so the traced pass can be judged on its own.
+    VoxelGridDemo.StartWithModel = !args.Contains("--no-model");
 
     if (args.Contains("--dig"))
         VoxelGridDemo.AutoDigAfterFrames = 200;
