@@ -491,12 +491,11 @@ public static class VoxelGridDemo
                         Enabled = true,
                         Size = LightShadowMapSize.Large,
                         Filter = new LightShadowMapFilterTypePcf(),
-                        // More than the default. A surface found by a ray writes its own depth into
-                        // the shadow map, and at a grazing angle that depth sits within a cell of the
-                        // one the receiving lookup computes, so the surface shadows itself along a
-                        // sawtooth a cell wide. A mesh gets away with less because its rasterised
-                        // depth and its lookup agree to the last bit.
-                        BiasParameters = { DepthBias = 0.03f, NormalOffsetScale = 30f },
+                        // A little more than the default, not three times it. A surface found by a
+                        // ray shadows itself along a sawtooth at grazing angles without some bias -
+                        // but the normal offset pushes the receiver towards the light, and at 30 it
+                        // ate the thin contact shadow a half-sunk ball leaves at its own base.
+                        BiasParameters = { DepthBias = 0.015f, NormalOffsetScale = 12f },
                     },
                 },
                 Intensity = 12f,
