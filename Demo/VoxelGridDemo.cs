@@ -303,6 +303,9 @@ public static class VoxelGridDemo
     /// <summary>Show the collider wireframe from the first frame, from --wireframe.</summary>
     public static bool StartWithWireframe { get; set; }
 
+    /// <summary>Diagnostic view of the drawn surface, from STRIDE_VOXEL_DEBUG; see VoxelGridFieldKeys.Debug.</summary>
+    public static float DebugView { get; set; }
+
     /// <summary>Surface to start on, from --surface. Lets an unattended capture photograph any of them.</summary>
     public static VoxelSurfaceForm StartSurface { get; set; } = VoxelSurfaceForm.MarchingCubes;
 
@@ -478,6 +481,7 @@ public static class VoxelGridDemo
                 Surface = StartSurface,
             },
             CastShadows = true,
+            DebugView = DebugView,
         });
 
         // -- a light, because the drawn grid now needs one ------------------------------------

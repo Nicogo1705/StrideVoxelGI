@@ -244,6 +244,8 @@ game.Script.AddTask(async () =>
 
     // --no-model leaves the grid out of the mesh path, so the traced pass can be judged on its own.
     VoxelGridDemo.StartWithModel = !args.Contains("--no-model");
+    if (float.TryParse(Environment.GetEnvironmentVariable("STRIDE_VOXEL_DEBUG"), NumberStyles.Float, CultureInfo.InvariantCulture, out var debugView))
+        VoxelGridDemo.DebugView = debugView;
 
     if (args.Contains("--dig"))
         VoxelGridDemo.AutoDigAfterFrames = 200;
