@@ -8,6 +8,7 @@ using Stride.BepuPhysics.Definitions.Colliders;
 using Stride.BepuPhysics.Definitions.Colliders.Voxels;
 using Stride.Core.Mathematics;
 using Stride.Engine;
+using Stride.Rendering.Voxels;
 using Stride.Games;
 using Stride.Graphics;
 using Stride.Input;
@@ -414,6 +415,11 @@ public static class VoxelGridDemo
             VolumeSize = Extent * 4f,
             ClipMapLevels = 3,
             Quality = VoxelGIQuality.UltraPlus,
+            // And the hall's lighting balance, for the same reasons it gives: radiance halves per
+            // mip rather than falling with the fill count, and the bounce doubled to match.
+            BounceIntensity = 2f,
+            LightFalloff = VoxelAttributeEmissionOpacity.LightFalloffs.PhysicallyBased,
+            Opacify = 1f,
             SpecularSteps = 576,
             SpecularRange = 24f,
             SpecularRoughnessCutoff = 1.0f,
