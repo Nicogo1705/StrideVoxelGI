@@ -247,6 +247,7 @@ game.Script.AddTask(async () =>
 
     // The two switches that decide what the frame costs, so a capture can measure either way.
     VoxelGridDemo.StartWithShadows = !args.Contains("--no-shadows");
+    VoxelGridDemo.StartWithInjection = !args.Contains("--no-inject");
     VoxelGridDemo.StartWithGI = args.Contains("--gi") || args.Contains("--gi-only");
     VoxelGridDemo.StartWithLights = !args.Contains("--gi-only");
 

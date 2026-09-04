@@ -339,6 +339,8 @@ public static class VoxelGridDemo
 
     /// <summary>Start without the grid casting shadows, from --no-shadows.</summary>
     public static bool StartWithShadows { get; set; } = true;
+    /// <summary>Whether the field is injected into the GI volume directly, or its proxy voxelized like a mesh.</summary>
+    public static bool StartWithInjection { get; set; } = true;
 
     /// <summary>Start with the GI volume around the camera, from --gi.</summary>
     public static bool StartWithGI { get; set; }
@@ -574,6 +576,7 @@ public static class VoxelGridDemo
                 Surface = StartSurface,
             },
             CastShadows = StartWithShadows,
+            InjectIntoGI = StartWithInjection,
             DebugView = DebugView,
             Dither = StartDither,
         });
