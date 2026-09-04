@@ -343,6 +343,12 @@ public static class VoxelGridDemo
     public static bool StartWithShadows { get; set; } = true;
     /// <summary>Whether the field is injected into the GI volume directly, or its proxy voxelized like a mesh.</summary>
     public static bool StartWithInjection { get; set; } = true;
+    /// <summary>How much of the previous frame's light the injected field bounces; negative keeps the component's default.</summary>
+    public static float StartInjectBounce { get; set; } = -1f;
+    /// <summary>Where the GI cones start, in voxels from the surface; zero keeps the marchers' default.</summary>
+    // Three: at one, the cones of a polished sphere graze its own voxel shell at fixed angles as
+    // they climb the mips and the sphere wears rings; two leaves a trace, three clears them.
+    public static float StartConeOffset { get; set; } = 3f;
 
     /// <summary>Start with the GI volume around the camera, from --gi.</summary>
     public static bool StartWithGI { get; set; }
@@ -437,6 +443,7 @@ public static class VoxelGridDemo
             LightFalloff = VoxelAttributeEmissionOpacity.LightFalloffs.PhysicallyBased,
             Opacify = 1f,
             SpecularSteps = 576,
+            ConeOffset = StartConeOffset,
             SpecularRange = 24f,
             SpecularRoughnessCutoff = 1.0f,
             AutoFreeze = false,
@@ -586,6 +593,8 @@ public static class VoxelGridDemo
         // The palette, by id. The arch emits; with the sun and the ambient off it is the only light
         // there is, and with a GI volume around the camera it lights the field it stands on.
         grid.Materials.AddRange(BuildMaterials(game.GraphicsDevice));
+        if (StartInjectBounce >= 0f)
+            grid.InjectBounce = StartInjectBounce;
 
         // -- a light, because the drawn grid now needs one ------------------------------------
         // The traced pass lit itself from a direction it kept in its own parameters, which is exactly

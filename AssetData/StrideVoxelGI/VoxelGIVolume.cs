@@ -428,6 +428,20 @@ public class VoxelGIVolume : SyncScript
 
     private float specularRoughnessCutoff;
 
+    /// <summary>
+    /// How far along the normal, in voxels, every cone starts from the shaded point: the diffuse
+    /// set's offset and the specular cone's alike. Zero keeps the marchers' own default of one.
+    /// Curved surfaces draw rings when a cone grazes its own voxel shell; starting further out clears them.
+    /// </summary>
+    [DataMemberIgnore]
+    public float ConeOffset
+    {
+        get => coneOffset;
+        set { coneOffset = value; Apply(); }
+    }
+
+    private float coneOffset;
+
     /// <summary>The cutoff actually in force, preset included.</summary>
     [DataMemberIgnore]
     public float EffectiveSpecularRoughnessCutoff
@@ -665,6 +679,14 @@ public class VoxelGIVolume : SyncScript
             voxelLight.BounceIntensityScale = secondBounce;
             voxelLight.SpecularIntensityScale = specularIntensity;
             voxelLight.SpecularRoughnessCutoff = EffectiveSpecularRoughnessCutoff;
+            if (coneOffset > 0f)
+            {
+                voxelLight.SpecularOffset = coneOffset;
+                if (voxelLight.DiffuseMarcher is VoxelMarchSetBase diffuseSet)
+                    diffuseSet.Offset = coneOffset;
+                if (voxelLight.BounceMarcher is VoxelMarchSetBase bounceSet)
+                    bounceSet.Offset = coneOffset;
+            }
             // Reuse the marcher when only the range moved. LightVoxelRenderer composes a marcher's
             // parameter keys in UpdateMarchingLayout, and only calls it when the shader permutation
             // changes - which range, being a uniform rather than a template argument, does not do.
