@@ -230,6 +230,12 @@ game.Script.AddTask(async () =>
     // The grid's size and resolution, because the pair is the whole cost model of a dense field and
     // it is worth being able to move it without a rebuild. Cubic in the sample count: 129 is eight
     // times the field 65 is, not twice.
+    // Ten times the field on each side, a hundred times its area: 257 samples at 0.625 units.
+    if (args.Contains("--big"))
+    {
+        VoxelGridDemo.Samples = 257;
+        VoxelGridDemo.CellSize = 0.625f;
+    }
     if (int.TryParse(Option("--samples"), out var samples) && samples > 1)
         VoxelGridDemo.Samples = samples;
     if (float.TryParse(Option("--cell"), NumberStyles.Float, CultureInfo.InvariantCulture, out var cell) && cell > 0)
@@ -250,6 +256,8 @@ game.Script.AddTask(async () =>
     VoxelGridDemo.StartWithInjection = !args.Contains("--no-inject");
     VoxelGridDemo.StartInjectBounce = ParseFloat(Option("--inject-bounce"), -1f);
     VoxelGridDemo.StartConeOffset = ParseFloat(Option("--cone-offset"), VoxelGridDemo.StartConeOffset);
+    VoxelGridDemo.StartLodBias = args.Contains("--no-lod") ? float.NaN : ParseFloat(Option("--lod-bias"), VoxelGridDemo.StartLodBias);
+    VoxelGridDemo.StartSkyIntensity = ParseFloat(Option("--sky"), VoxelGridDemo.StartSkyIntensity);
     VoxelGridDemo.StartWithGI = args.Contains("--gi") || args.Contains("--gi-only");
     VoxelGridDemo.StartWithLights = !args.Contains("--gi-only");
 

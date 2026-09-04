@@ -59,7 +59,17 @@ public static class VoxelGridDemo
     /// <summary>Centre and radius of the sphere in the field, so a capture can frame it.</summary>
     public static Vector3 SphereCentre => new(Extent * 0.5f, Extent * 0.42f, Extent * 0.5f);
 
-    public const float SphereRadius = 3.4f;
+    public static float SphereRadius => 3.4f * FeatureScale;
+
+    /// <summary>How much larger than the 16-unit original the field is; the props grow with it.</summary>
+    public static float FeatureScale => Extent / 16f;
+
+    /// <summary>What the GI cones see where they meet nothing; black keeps the scene lit by its emitters alone.</summary>
+    public static Color3 StartSky { get; set; } = new Color3(0.30f, 0.36f, 0.48f);
+    public static float StartSkyIntensity { get; set; } = 0.6f;
+
+    /// <summary>Level-of-detail bias of the drawn field, in levels; NaN turns the level of detail off.</summary>
+    public static float StartLodBias { get; set; } = 0f;
 
     /// <summary>
     /// A field worth looking at: rolling ground, a big sphere half sunk into it, and an arch, each
@@ -70,6 +80,10 @@ public static class VoxelGridDemo
     {
         var samples = new ushort[Samples * Samples * Samples];
         var centre = SphereCentre;
+        // The props scale with the field, and the density ramps widen with the cell so a surface
+        // still crosses a few samples rather than snapping from air to solid in one.
+        var k = FeatureScale;
+        var softness = MathF.Max(CellSize / 0.125f, 1f);
 
         for (int x = 0; x < Samples; ++x)
         {
@@ -80,28 +94,30 @@ public static class VoxelGridDemo
                     var p = new Vector3(x, y, z) * CellSize;
 
                     // Ground: two sine ridges crossing, so the surface is never flat enough to hide
-                    // a normal that is wrong.
+                    // a normal that is wrong; and on a large field, hills that take the whole of it.
                     var height = Extent * 0.28f
                                  + MathF.Sin(p.X * 0.55f) * 0.9f
                                  + MathF.Cos(p.Z * 0.42f) * 1.1f
-                                 + MathF.Sin((p.X + p.Z) * 0.23f) * 0.7f;
-                    var ground = Saturate((height - p.Y) * 0.9f);
+                                 + MathF.Sin((p.X + p.Z) * 0.23f) * 0.7f
+                                 + (MathF.Sin(p.X * 0.11f / k) * MathF.Cos(p.Z * 0.09f / k)
+                                    + 0.6f * MathF.Sin((p.X - p.Z) * 0.05f / k)) * (k - 1f) * 1.6f;
+                    var ground = Saturate((height - p.Y) * 0.9f / softness);
 
                     // A sphere sitting in the ground, and an arch crossing it: a torus cut in half
-                    // by the ground plane reads as an arch from any angle.
-                    var sphere = Saturate((SphereRadius - (p - centre).Length()) * 0.9f);
-                    var toCentre = new Vector2(p.X - centre.X, p.Z - centre.Z + 5.0f);
-                    var ring = new Vector2(toCentre.Length() - 4.0f, p.Y - Extent * 0.30f);
-                    var arch = Saturate((1.1f - ring.Length()) * 1.2f);
+                    // by the ground plane reads as an arch from any angle. Both grow with the field.
+                    var sphere = Saturate((SphereRadius - (p - centre).Length()) * 0.9f / softness);
+                    var toCentre = new Vector2(p.X - centre.X, p.Z - centre.Z + 5.0f * k);
+                    var ring = new Vector2(toCentre.Length() - 4.0f * k, p.Y - Extent * 0.30f);
+                    var arch = Saturate((1.1f * k - ring.Length()) * 1.2f / softness);
 
                     // A white pillar in each corner: a lamp per corner, so the far reaches of the
                     // field get light from somewhere when the arch is the only other emitter.
-                    var inset = 1.5f;
+                    var inset = 1.5f * k;
                     var cornerX = MathF.Min(MathF.Abs(p.X - inset), MathF.Abs(p.X - (Extent - inset)));
                     var cornerZ = MathF.Min(MathF.Abs(p.Z - inset), MathF.Abs(p.Z - (Extent - inset)));
-                    var pillarRadial = 0.7f - MathF.Max(cornerX, cornerZ);
+                    var pillarRadial = 0.7f * k - MathF.Max(cornerX, cornerZ);
                     var pillarVertical = MathF.Min(p.Y, Extent * 0.55f - p.Y);
-                    var pillar = Saturate(MathF.Min(pillarRadial, pillarVertical) * 1.2f);
+                    var pillar = Saturate(MathF.Min(pillarRadial, pillarVertical) * 1.2f / softness);
 
                     var density = MathF.Max(MathF.Max(ground, pillar), MathF.Max(sphere, arch));
                     // Decided with a margin, not on equality. Where two of the three shapes have
@@ -155,12 +171,48 @@ public static class VoxelGridDemo
 
         // Created empty and filled afterwards, rather than handed its data here: a texture given its
         // contents at creation is immutable, and the first dig then throws from inside SetData -
-        // far from the line that decided it.
+        // far from the line that decided it. With a full mip chain: each level is the field at
+        // half the samples, which is what the walk reads far from the camera.
         gpuTexture = Texture.New3D(
-            game.GraphicsDevice, Samples, Samples, Samples, PixelFormat.R8G8_UNorm,
+            game.GraphicsDevice, Samples, Samples, Samples, new MipMapCount(true), PixelFormat.R8G8_UNorm,
             TextureFlags.ShaderResource, GraphicsResourceUsage.Default);
         UploadTexture(game.GraphicsContext.CommandList);
         return gpuTexture;
+    }
+
+    /// <summary>
+    /// One level coarser: sample j of the result stands over sample 2j of the source, filtered
+    /// over its two neighbours along each axis so the surface smooths rather than aliases, and
+    /// keeps its place - a plain 2x2x2 average would shift every level half a cell. The material
+    /// is the centre sample's.
+    /// </summary>
+    private static byte[] Downsample(byte[] source, int size, int next)
+    {
+        var result = new byte[next * next * next * 2];
+        int Index(int x, int y, int z) => ((z * size + y) * size + x) * 2;
+        Span<int> taps = stackalloc int[3];
+        for (int z = 0; z < next; ++z)
+            for (int y = 0; y < next; ++y)
+                for (int x = 0; x < next; ++x)
+                {
+                    int cx = Math.Min(x * 2, size - 1), cy = Math.Min(y * 2, size - 1), cz = Math.Min(z * 2, size - 1);
+                    float sum = 0f, weight = 0f;
+                    for (int dz = -1; dz <= 1; ++dz)
+                        for (int dy = -1; dy <= 1; ++dy)
+                            for (int dx = -1; dx <= 1; ++dx)
+                            {
+                                int sx = cx + dx, sy = cy + dy, sz = cz + dz;
+                                if (sx < 0 || sy < 0 || sz < 0 || sx >= size || sy >= size || sz >= size)
+                                    continue;
+                                float w = (dx == 0 ? 2f : 1f) * (dy == 0 ? 2f : 1f) * (dz == 0 ? 2f : 1f);
+                                sum += source[Index(sx, sy, sz)] * w;
+                                weight += w;
+                            }
+                    int o = ((z * next + y) * next + x) * 2;
+                    result[o] = (byte)MathF.Round(sum / weight);
+                    result[o + 1] = source[Index(cx, cy, cz) + 1];
+                }
+        return result;
     }
 
     /// <summary>
@@ -173,8 +225,20 @@ public static class VoxelGridDemo
     /// </remarks>
     private static void UploadTexture(CommandList commandList)
     {
-        if (gpuTexture != null && gpuTexels != null)
-            gpuTexture.SetData(commandList, gpuTexels);
+        if (gpuTexture == null || gpuTexels == null)
+            return;
+        gpuTexture.SetData(commandList, gpuTexels);
+
+        // The whole chain again: a dig is a ball, and the levels are cheap next to the field.
+        var level = gpuTexels;
+        var size = Samples;
+        for (int mip = 1; mip < gpuTexture.MipLevelCount; mip++)
+        {
+            var next = Math.Max(size / 2, 1);
+            level = Downsample(level, size, next);
+            size = next;
+            gpuTexture.SetData(commandList, level, 0, mip);
+        }
     }
 
     /// <summary>Density in red, the material id in green - what the texture source reads.</summary>
@@ -435,14 +499,23 @@ public static class VoxelGridDemo
 
         giVolume = new Entity("Voxel GI");
         giVolume.Transform.Position = cameraEntity.Transform.Position;
+        // A field much larger than the original is lit differently: 128^3 rings rather than 256^3,
+        // so that twice as many of them fit in memory, and the cones traced at half the screen. The
+        // finest ring keeps its 16 units around the camera; the far field is held by rings four,
+        // five and six, whose voxels are metres across - and the field injects itself into each
+        // ring at that ring's own level of detail, so what they hold is the field as they can see it.
+        var big = Extent > 40f;
         giVolume.Add(new VoxelGIVolume
         {
             // The gallery's settings, which the hall settled on after trying both ends: consistent
             // and coarse beats fine and seamed. Four times the grid at three levels puts the finest
             // ring over the whole field at once, so following the camera has little to re-snap.
-            VolumeSize = Extent * 4f,
-            ClipMapLevels = 3,
-            Quality = VoxelGIQuality.UltraPlus,
+            VolumeSize = big ? Extent * 4f : Extent * 4f,
+            ClipMapLevels = big ? 6 : 3,
+            Quality = big ? VoxelGIQuality.Ultra : VoxelGIQuality.UltraPlus,
+            GIResolutionDivisor = big ? 2 : 0,
+            SkyColor = StartSky,
+            SkyIntensity = StartSkyIntensity,
             // And the hall's lighting balance, for the same reasons it gives: radiance halves per
             // mip rather than falling with the fill count, and the bounce doubled to match.
             BounceIntensity = 2f,
@@ -592,6 +665,8 @@ public static class VoxelGridDemo
             },
             CastShadows = StartWithShadows,
             InjectIntoGI = StartWithInjection,
+            LevelOfDetail = !float.IsNaN(StartLodBias),
+            LodBias = float.IsNaN(StartLodBias) ? 0f : StartLodBias,
             DebugView = DebugView,
             Dither = StartDither,
         });

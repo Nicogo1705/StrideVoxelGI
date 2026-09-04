@@ -442,6 +442,29 @@ public class VoxelGIVolume : SyncScript
 
     private float coneOffset;
 
+    /// <summary>
+    /// What a cone sees where it leaves the volume without meeting anything: the sky, credited by
+    /// how much of the cone is still open. Black leaves the volume lit by its emitters alone.
+    /// </summary>
+    [DataMemberIgnore]
+    public Color3 SkyColor
+    {
+        get => skyColor;
+        set { skyColor = value; Apply(); }
+    }
+
+    private Color3 skyColor;
+
+    /// <summary>Multiplier on <see cref="SkyColor"/>.</summary>
+    [DataMemberIgnore]
+    public float SkyIntensity
+    {
+        get => skyIntensity;
+        set { skyIntensity = value; Apply(); }
+    }
+
+    private float skyIntensity = 1f;
+
     /// <summary>The cutoff actually in force, preset included.</summary>
     [DataMemberIgnore]
     public float EffectiveSpecularRoughnessCutoff
@@ -679,6 +702,8 @@ public class VoxelGIVolume : SyncScript
             voxelLight.BounceIntensityScale = secondBounce;
             voxelLight.SpecularIntensityScale = specularIntensity;
             voxelLight.SpecularRoughnessCutoff = EffectiveSpecularRoughnessCutoff;
+            voxelLight.SkyColor = skyColor;
+            voxelLight.SkyIntensity = skyIntensity;
             if (coneOffset > 0f)
             {
                 voxelLight.SpecularOffset = coneOffset;
