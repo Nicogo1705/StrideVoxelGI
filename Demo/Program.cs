@@ -211,8 +211,6 @@ game.Script.AddTask(async () =>
                   : capture || profiler != VoxelGIProfilerPage.Off ? DemoCatalog.CornellBox
                   : (int?)null;
 
-    // The traced voxel pass joins the compositor now, switched off: adding a renderer once a frame
-    // is in flight modifies the list being walked to draw it.
     VoxelGridDemo.StartSurface = Option("--surface") switch
     {
         "cubes" => VoxelSurfaceForm.Cubes,
@@ -237,27 +235,24 @@ game.Script.AddTask(async () =>
 
     DemoShell.ExitAfterShots = !args.Contains("--stay");
     VoxelGridDemo.StartWithWireframe = args.Contains("--wireframe");
-    // Off by default now that the grid draws as a model.
-    //
-    // Both paths draw the same field, and at nearly the same depth: run together they fight over
-    // every pixel of the surface and it comes out as speckle. V still turns the traced pass on, and
-    // seeing them disagree is the point of being able to.
-    VoxelGridDemo.StartWithTrace = args.Contains("--trace");
+    VoxelGridDemo.StartDither = Option("--dither") switch
+    {
+        "sharp" => VoxelMaterialDither.Sharp,
+        "bayer4" => VoxelMaterialDither.Bayer4x4,
+        "bayer8" => VoxelMaterialDither.Bayer8x8,
+        _ => VoxelMaterialDither.InterleavedGradientNoise,
+    };
 
     // The two switches that decide what the frame costs, so a capture can measure either way.
     VoxelGridDemo.StartWithShadows = !args.Contains("--no-shadows");
     VoxelGridDemo.StartWithGI = args.Contains("--gi") || args.Contains("--gi-only");
     VoxelGridDemo.StartWithLights = !args.Contains("--gi-only");
 
-    // --no-model leaves the grid out of the mesh path, so the traced pass can be judged on its own.
-    VoxelGridDemo.StartWithModel = !args.Contains("--no-model");
     if (float.TryParse(Environment.GetEnvironmentVariable("STRIDE_VOXEL_DEBUG"), NumberStyles.Float, CultureInfo.InvariantCulture, out var debugView))
         VoxelGridDemo.DebugView = debugView;
 
     if (args.Contains("--dig"))
         VoxelGridDemo.AutoDigAfterFrames = 200;
-
-    VoxelGridDemo.InstallPass(game);
 
     // Screen space reflections read a normals buffer that only a scene with meshes produces, and the
     // game now starts on one with none. Off until a demo asks for it - the gallery does.

@@ -260,11 +260,11 @@ public sealed class DemoShell : SyncScript
                 screenshotStatus = null;
         }
 
-        // The traced pass is a compositor object rather than a script, so its key lives here.
+        // The grid's switches are static, so their keys live here rather than on a script.
         if (running == DemoCatalog.VoxelGrid)
         {
-            if (Input.IsKeyPressed(Keys.V))
-                VoxelGridDemo.PassEnabled = !VoxelGridDemo.PassEnabled;
+            if (Input.IsKeyPressed(Keys.N))
+                VoxelGridDemo.CycleDither();
             if (Input.IsKeyPressed(Keys.B))
                 VoxelGridDemo.CycleSurface();
             if (Input.IsKeyPressed(Keys.C))
@@ -283,7 +283,7 @@ public sealed class DemoShell : SyncScript
             DebugText.Print($"drawn    [B] : {VoxelGridDemo.Surface}", new Int2(16, y));
             DebugText.Print($"collider [C] : {VoxelGridDemo.ColliderForm}", new Int2(16, y + LineHeight));
             DebugText.Print($"aim          : {VoxelGridDemo.AimStatus}", new Int2(16, y + LineHeight * 2));
-            DebugText.Print($"shadows  [O] : {(VoxelGridDemo.CastShadows ? "cast" : "not cast")}      voxel GI [G] : {(VoxelGridDemo.GIEnabled ? "around the camera" : "off")}      lights [L] : {(VoxelGridDemo.LightsEnabled ? "sun and ambient" : "the arch alone")}", new Int2(16, y + LineHeight * 3));
+            DebugText.Print($"shadows  [O] : {(VoxelGridDemo.CastShadows ? "cast" : "not cast")}      voxel GI [G] : {(VoxelGridDemo.GIEnabled ? "around the camera" : "off")}      lights [L] : {(VoxelGridDemo.LightsEnabled ? "sun and ambient" : "the arch alone")}      boundary [N] : {VoxelGridDemo.Dither}", new Int2(16, y + LineHeight * 3));
         }
 
     }
@@ -378,10 +378,6 @@ public sealed class DemoShell : SyncScript
         ui.Enabled = false;
         HostGame.IsMouseVisible = false;
 
-        // The traced grid is a compositor pass rather than an entity, so it is switched here rather
-        // than torn down with the scene.
-        VoxelGridDemo.PassEnabled = index == DemoCatalog.VoxelGrid && VoxelGridDemo.StartWithTrace;
-
         pendingDemo = index;
         pendingDelay = 1;
     }
@@ -416,7 +412,6 @@ public sealed class DemoShell : SyncScript
             postEffects.LocalReflections.Enabled = false;
 
         running = null;
-        VoxelGridDemo.PassEnabled = false;
 
         pendingMenu = true;
         pendingDelay = 1;

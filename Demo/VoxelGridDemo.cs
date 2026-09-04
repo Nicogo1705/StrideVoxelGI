@@ -230,7 +230,7 @@ public static class VoxelGridDemo
     /// </remarks>
     public static void Edit(IGame game, Vector3 centre, float radius, bool fill)
     {
-        if (cachedSamples is null || gpuSamples is null || gpuBuffer is null || collider is null)
+        if (cachedSamples is null || collider is null)
             return;
 
         // Sample coordinates are cell coordinates: sample (x, y, z) sits at x * CellSize.
@@ -285,7 +285,6 @@ public static class VoxelGridDemo
 
                     var packed = (ushort)(target | material);
                     cachedSamples[index] = packed;
-                    gpuSamples[index] = packed;
                     if (gpuTexels != null)
                         WriteTexel(gpuTexels, (z * Samples + y) * Samples + x, packed);
                     collider.SetVoxel(x, y, z, packed);
@@ -297,7 +296,6 @@ public static class VoxelGridDemo
         if (!touched)
             return;
 
-        gpuBuffer.SetData(game.GraphicsContext.CommandList, gpuSamples);
         UploadTexture(game.GraphicsContext.CommandList);
 
         // The pyramid over the box the brush touched, and nothing outside it.
@@ -308,20 +306,11 @@ public static class VoxelGridDemo
         collider.NotifyFieldChanged();
     }
 
-    /// <summary>The traced pass's traversal, over the packed buffer. Outlives the scene, as the pass does.</summary>
-    private static VoxelGridTraversalDDA? traversal;
-
     /// <summary>The model's own traversal, over the texture copy of the field. Follows every switch.</summary>
     private static VoxelGridTraversalDDA? modelTraversal;
 
     /// <summary>Collider form to start on, from --collider.</summary>
     public static VoxelChildForm StartColliderForm { get; set; } = VoxelChildForm.TriangleMarchingCubes;
-
-    /// <summary>Draw the grid as a model, off with --no-model so the traced pass can be judged alone.</summary>
-    public static bool StartWithModel { get; set; } = true;
-
-    /// <summary>Start with the traced pass on, from --trace. Both paths draw the same surface, so off by default.</summary>
-    public static bool StartWithTrace { get; set; }
 
     /// <summary>Show the collider wireframe from the first frame, from --wireframe.</summary>
     public static bool StartWithWireframe { get; set; }
@@ -340,6 +329,9 @@ public static class VoxelGridDemo
 
     /// <summary>Start with the GI volume around the camera, from --gi.</summary>
     public static bool StartWithGI { get; set; }
+
+    /// <summary>How material boundaries are drawn at the start, from --dither.</summary>
+    public static VoxelMaterialDither StartDither { get; set; } = VoxelMaterialDither.InterleavedGradientNoise;
 
     /// <summary>Start with the sun and the ambient off, from --gi-only, so the field is lit by what it emits.</summary>
     public static bool StartWithLights { get; set; } = true;
@@ -372,8 +364,21 @@ public static class VoxelGridDemo
         set { if (grid is not null) grid.CastShadows = value; }
     }
 
-    /// <summary>The palette the drawn grid was given, for the traced pass to share.</summary>
-    public static VoxelGridPalette? ModelPalette => modelTraversal?.Palette;
+    /// <summary>How a boundary between two materials is shared out between pixels.</summary>
+    public static VoxelMaterialDither Dither
+    {
+        get => grid?.Dither ?? VoxelMaterialDither.InterleavedGradientNoise;
+        set { if (grid is not null) grid.Dither = value; }
+    }
+
+    /// <summary>Steps to the next way of drawing a material boundary.</summary>
+    public static void CycleDither() => Dither = Dither switch
+    {
+        VoxelMaterialDither.Sharp => VoxelMaterialDither.Bayer4x4,
+        VoxelMaterialDither.Bayer4x4 => VoxelMaterialDither.Bayer8x8,
+        VoxelMaterialDither.Bayer8x8 => VoxelMaterialDither.InterleavedGradientNoise,
+        _ => VoxelMaterialDither.Sharp,
+    };
 
     /// <summary>Whether a voxel GI volume is following the camera.</summary>
     public static bool GIEnabled => giVolume is not null;
@@ -421,17 +426,11 @@ public static class VoxelGridDemo
         currentScene.Entities.Add(giVolume);
     }
 
-    /// <summary>Which surface the traced pass stops on.</summary>
+    /// <summary>Which surface the walk stops on.</summary>
     public static VoxelSurfaceForm Surface
     {
-        get => traversal?.Surface ?? VoxelSurfaceForm.MarchingCubes;
-        set
-        {
-            // Both paths, or B changes the traced pass and leaves the model where it was - which
-            // reads as the model ignoring the key rather than as a second traversal nobody told.
-            if (traversal is not null) traversal.Surface = value;
-            if (modelTraversal is not null) modelTraversal.Surface = value;
-        }
+        get => modelTraversal?.Surface ?? VoxelSurfaceForm.MarchingCubes;
+        set { if (modelTraversal is not null) modelTraversal.Surface = value; }
     }
 
     /// <summary>Steps to the next drawn surface.</summary>
@@ -474,15 +473,7 @@ public static class VoxelGridDemo
         _ => VoxelChildForm.TriangleMarchingCubes,
     };
 
-    /// <summary>Whether the traced pass draws. Owned by the shell, since the pass outlives the scene.</summary>
-    public static bool PassEnabled
-    {
-        get => VoxelGridPass.Enabled;
-        set => VoxelGridPass.Enabled = value;
-    }
-
     private static ushort[]? cachedSamples;
-    private static bool passInstalled;
 
     private static uint[]? gpuSamples;
     private static byte[]? gpuTexels;
@@ -490,7 +481,7 @@ public static class VoxelGridDemo
     private static GraphicsBuffer? gpuBuffer;
     private static VoxelCollider? collider;
 
-    /// <summary>The min/max pyramid both traversals skip empty space on. One field, one pyramid.</summary>
+    /// <summary>The min/max pyramid the traversal skips empty space on.</summary>
     private static VoxelGridOccupancy? occupancy;
 
     /// <summary>Density of one sample as the pyramid reads it, from the CPU copy of the field.</summary>
@@ -500,55 +491,8 @@ public static class VoxelGridDemo
     /// <summary>Scaffolding: carve a fixed trench after this many frames, for an unattended capture.</summary>
     public static int AutoDigAfterFrames { get; set; }
 
-    /// <summary>
-    /// Puts the traced pass in the compositor, switched off. Called once, before the game loop.
-    /// </summary>
-    /// <remarks>
-    /// Before the loop and not on entering the demo: the compositor's renderers are walked while a
-    /// frame is being drawn, and adding one from a script means adding it to a list something else
-    /// is enumerating.
-    /// </remarks>
-    public static void InstallPass(Game game)
-    {
-        if (passInstalled)
-            return;
-        passInstalled = true;
-
-        var samples = cachedSamples ??= Generate();
-        InstallPass(game, samples);
-        PassEnabled = false;
-    }
-
-    private static VoxelGridRenderer? renderer;
-
     public static void Build(Game game, Entity camera)
         => BuildScene(game, game.SceneSystem.SceneInstance.RootScene, camera, cachedSamples ??= Generate());
-
-    private static void InstallPass(Game game, ushort[] samples)
-    {
-        renderer = new VoxelGridRenderer
-        {
-            Traversal = traversal = new VoxelGridTraversalDDA
-            {
-                Source = new VoxelGridSourcePackedBuffer
-                {
-                    Data = CreateBuffer(game.GraphicsDevice, samples),
-                    SampleCount = new Int3(Samples, Samples, Samples),
-                },
-                CellSize = CellSize,
-                IsoLevel = IsoLevel,
-                // Long enough to cross the grid corner to corner, whatever it was sized at: a walk
-                // that runs out of steps stops mid-field and punches a hole in the surface.
-                MaxSteps = Samples * 3 + 64,
-                Surface = StartSurface,
-            },
-            World = Matrix.Identity,
-            MaxDistance = 200f,
-            DebugBounds = new Vector3(Extent, Extent, Extent),
-        };
-
-        AppendPass(game.SceneSystem.GraphicsCompositor.Game, new VoxelGridPass { Renderer = renderer });
-    }
 
     private static void BuildScene(Game game, Scene scene, Entity camera, ushort[] samples)
     {
@@ -556,13 +500,11 @@ public static class VoxelGridDemo
         cameraEntity = camera;
         giVolume = null;
 
-        // The pyramid outlives the scene as the pass does, and both traversals read the same one.
+        // The pyramid outlives the scene, as the field does.
         if (occupancy is null)
         {
             occupancy = new VoxelGridOccupancy(game.GraphicsDevice, new Int3(Samples, Samples, Samples));
             occupancy.Update(game.GraphicsContext.CommandList, ReadDensity);
-            if (traversal is not null)
-                traversal.Occupancy = occupancy;
         }
 
         // -- the same field, collided against ------------------------------------------------
@@ -594,7 +536,6 @@ public static class VoxelGridDemo
         }
 
         // -- the same field, drawn the way a model is drawn -----------------------------------
-        if (StartWithModel)
         terrain.Add(grid = new VoxelGridComponent
         {
             Traversal = modelTraversal = new VoxelGridTraversalDDA
@@ -612,6 +553,7 @@ public static class VoxelGridDemo
             },
             CastShadows = StartWithShadows,
             DebugView = DebugView,
+            Dither = StartDither,
         });
 
         // The palette, by id. The arch emits; with the sun and the ambient off it is the only light
@@ -752,75 +694,5 @@ public static class VoxelGridDemo
         var entity = new Entity("ReferenceMesh") { new ModelComponent(model) { IsShadowCaster = true } };
         entity.Transform.Position = new Vector3(Extent * 0.5f + 4.5f, Extent * 0.46f, Extent * 0.5f - 4.5f);
         return entity;
-    }
-
-    /// <summary>
-    /// Puts the pass inside the camera renderer, after whatever already draws the scene.
-    /// </summary>
-    /// <remarks>
-    /// Inside matters: a renderer sitting beside the camera renderer rather than under it runs with
-    /// no RenderView, so it has no camera to build rays from and quietly draws nothing. The search
-    /// therefore descends to the SceneCameraRenderer and appends within it.
-    /// </remarks>
-    private static bool AppendPass(ISceneRenderer? renderer, ISceneRenderer pass)
-    {
-        switch (renderer)
-        {
-            case SceneCameraRenderer camera:
-                if (camera.Child is SceneRendererCollection inner)
-                {
-                    inner.Children.Add(pass);
-                }
-                else
-                {
-                    var wrapper = new SceneRendererCollection();
-                    wrapper.Children.Add(camera.Child);
-                    wrapper.Children.Add(pass);
-                    camera.Child = wrapper;
-                }
-                return true;
-
-            case SceneRendererCollection collection:
-                foreach (var child in collection.Children)
-                {
-                    if (AppendPass(child, pass))
-                        return true;
-                }
-                return false;
-
-            default:
-                return false;
-        }
-    }
-}
-
-/// <summary>Draws the traced grid over whatever the forward renderer produced.</summary>
-public class VoxelGridPass : SceneRendererBase
-{
-    public static bool Enabled = true;
-
-    public VoxelGridRenderer? Renderer;
-
-    protected override void DrawCore(RenderContext context, RenderDrawContext drawContext)
-    {
-        if (!Enabled || Renderer is null)
-            return;
-
-        // One palette for the field, built by the grid component from its material list; the
-        // traced pass reads the same one.
-        if (Renderer.Traversal is { Palette: null } shared)
-            shared.Palette = VoxelGridDemo.ModelPalette;
-
-        var output = drawContext.CommandList.RenderTarget;
-        if (output is null)
-            return;
-
-        var depth = drawContext.CommandList.DepthStencilBuffer;
-        if (depth is not null)
-            Renderer.SetDepthOutput(depth, output);
-        else
-            Renderer.SetOutput(output);
-
-        Renderer.Draw(drawContext);
     }
 }
