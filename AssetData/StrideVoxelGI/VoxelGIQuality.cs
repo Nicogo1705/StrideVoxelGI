@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Nicogo. Distributed under the MIT license.
+// Copyright (c) 2026 Nicogo. Distributed under the MIT license.
 using System;
 using Stride.Core;
 using Stride.Graphics;
@@ -6,10 +6,6 @@ using Stride.Rendering.Voxels;
 
 namespace StrideVoxelGI;
 
-/// <summary>
-/// Four points on the cost/quality curve of voxel cone tracing. Each one picks a clipmap
-/// resolution, a voxel layout and how many cones are traced per pixel — see <see cref="VoxelGIPreset"/>.
-/// </summary>
 /// <summary>How many directions a voxel stores, and so how much of the texture budget it takes.</summary>
 public enum VoxelGIDirectionality
 {
@@ -23,15 +19,26 @@ public enum VoxelGIDirectionality
     Anisotropic,
 }
 
+/// <summary>
+/// Six points on the cost/quality curve of voxel cone tracing. Each one picks a clipmap
+/// resolution, a voxel layout and how many cones are traced per pixel - see <see cref="VoxelGIPreset"/>.
+/// </summary>
 public enum VoxelGIQuality
 {
-    /// <summary>64³ isotropic voxels, 6 diffuse cones. Cheapest; use it as the console/low-end tier.</summary>
+    /// <summary>
+    /// 32³ isotropic voxels in 10-bit storage, 6 short cones traced at a quarter of the screen, no
+    /// voxelization multisampling. For an integrated GPU or a laptop on battery: the bounce is
+    /// there, soft and coarse, at a small fraction of what Low costs.
+    /// </summary>
+    [Display("Potato (32³ isotropic, 6 cones, 1/4 screen)")] Potato,
+
+    /// <summary>64³ isotropic voxels, 6 diffuse cones. Cheap; the console/low-end tier.</summary>
     [Display("Low (64³ isotropic, 6 cones)")] Low,
 
     /// <summary>128³ isotropic voxels, 6 diffuse cones. The sane default.</summary>
     [Display("Medium (128³ isotropic, 6 cones)")] Medium,
 
-    /// <summary>128³ anisotropic voxels, 12 diffuse cones. Directional storage kills most light leaking.</summary>
+    /// <summary>128³ paired voxels, 12 diffuse cones. Directional storage kills most light leaking.</summary>
     [Display("High (128³ paired, 12 cones)")] High,
 
     /// <summary>128³ paired voxels, 12 long diffuse cones. Screenshot mode.</summary>
@@ -60,17 +67,14 @@ public enum VoxelGIQuality
 /// </summary>
 public sealed class VoxelGIPreset
 {
-    /// <summary>Voxels along the longest axis of the finest clipmap: 64, 128 or 256.</summary>
+    /// <summary>Voxels along the longest axis of the finest clipmap: 32, 64, 128 or 256.</summary>
     public VoxelStorageClipmaps.Resolutions ClipResolution = VoxelStorageClipmaps.Resolutions.x128;
 
     /// <summary>
-    /// Store six directional values per voxel instead of one. Roughly 6x the memory and a slower
-    /// voxelization, but a surface no longer receives light that reached the voxel from behind it —
-    /// which is what most "light leaks through the wall" complaints actually are.
-    /// </summary>
-    /// <summary>
     /// How the voxels store direction. Isotropic keeps one value per voxel; paired keeps three
     /// (one per axis, the two facings packed together); full anisotropic keeps six, one per facing.
+    /// </summary>
+    /// <remarks>
     /// <para>
     /// More directions means less light leaking through surfaces - and fewer clipmap rings. The
     /// storage stacks every ring and every direction down the Y axis of one 3D texture, which
@@ -79,8 +83,19 @@ public sealed class VoxelGIPreset
     /// resolves a wall, so paying six directions for a voxel eight times bigger is a bad trade.
     /// See <see cref="VoxelGIVolume.EffectiveClipMapLevels"/>.
     /// </para>
-    /// </summary>
+    /// </remarks>
     public VoxelGIDirectionality Directionality;
+
+    /// <summary>
+    /// What each voxel's radiance is stored as: four half floats, or ten bits a channel, or eight.
+    /// </summary>
+    /// <remarks>
+    /// The texture budget is the cost of voxel GI on a small GPU, and this halves it: a 10-bit
+    /// voxel is four bytes where a half-float one is eight. The range is what the bytes buy - the
+    /// packed formats hold radiance up to a fixed brightness and clip above it, so an emissive
+    /// panel at intensity ten reads as intensity one through them. Half floats hold anything.
+    /// </remarks>
+    public VoxelLayoutBase.StorageFormats StorageFormat = VoxelLayoutBase.StorageFormats.RGBA16F;
 
     /// <summary>Cones traced per pixel for diffuse GI: 6 (hemisphere) or 12.</summary>
     public int DiffuseCones = 6;
@@ -154,6 +169,23 @@ public sealed class VoxelGIPreset
 
     public static VoxelGIPreset For(VoxelGIQuality quality) => quality switch
     {
+        VoxelGIQuality.Potato => new VoxelGIPreset
+        {
+            // Everything at its floor. 32^3 keeps the atlas at a few megabytes in 10-bit storage;
+            // four steps reach sixteen voxels, which at this resolution is half the ring; a
+            // quarter-screen trace divides the cone cost by sixteen; no multisampling because the
+            // voxels are far coarser than anything it would catch; the specular cone traces only
+            // the glossiest surfaces, and briefly.
+            ClipResolution = VoxelStorageClipmaps.Resolutions.x32,
+            Directionality = VoxelGIDirectionality.Isotropic,
+            StorageFormat = VoxelLayoutBase.StorageFormats.R10G10B10A2,
+            DiffuseCones = 6,
+            DiffuseSteps = 4,
+            SpecularSteps = 8,
+            VoxelizationMSAA = MultisampleCount.None,
+            SpecularRoughnessCutoff = 0.4f,
+            GIResolutionDivisor = 4,
+        },
         VoxelGIQuality.Low => new VoxelGIPreset
         {
             ClipResolution = VoxelStorageClipmaps.Resolutions.x64,
@@ -261,14 +293,17 @@ public sealed class VoxelGIPreset
     /// </summary>
     public VoxelAttributeEmissionOpacity CreateAttribute()
     {
+        VoxelLayoutBase layout = Directionality switch
+        {
+            VoxelGIDirectionality.Paired => new VoxelLayoutAnisotropicPaired(),
+            VoxelGIDirectionality.Anisotropic => new VoxelLayoutAnisotropic(),
+            _ => new VoxelLayoutIsotropic(),
+        };
+        layout.StorageFormat = StorageFormat;
+
         var attribute = new VoxelAttributeEmissionOpacity
         {
-            VoxelLayout = Directionality switch
-            {
-                VoxelGIDirectionality.Paired => new VoxelLayoutAnisotropicPaired(),
-                VoxelGIDirectionality.Anisotropic => new VoxelLayoutAnisotropic(),
-                _ => new VoxelLayoutIsotropic(),
-            },
+            VoxelLayout = (IVoxelLayout)layout,
             LightFalloff = LightFalloff,
         };
 
@@ -306,21 +341,6 @@ public sealed class VoxelGIPreset
             : new VoxelMarchSetHemisphere6(marcher);
     }
 
-    /// <summary>The single cone traced for indirect specular (voxel reflections).</summary>
-    /// <summary>
-    /// The specular marcher, optionally with a tighter cone than the tier asks for. The ratio is
-    /// the aperture: at 1 the cone integrates whole mips and hands back the average of the room,
-    /// which is why a mirror under this tier shows a smear rather than a reflection; as it goes to
-    /// zero the cone closes into a ray march at the finest mip, and the reflection sharpens.
-    /// </summary>
-    /// <remarks>
-    /// The two arguments are one setting in two halves. A cone advances by its own current radius,
-    /// so the aperture sets how fast it grows and therefore how far a fixed number of steps
-    /// reaches: closing the cone from 1 to 0.25 makes it four times sharper and roughly four times
-    /// shorter. Sharpen without adding steps and the ray dies a couple of metres out, which reads
-    /// as a black reflection rather than a blurry one - so nothing here closes the cone without
-    /// paying for the range.
-    /// </remarks>
     /// <summary>
     /// How far a reflection may travel, in world units, or zero for the old unlimited march.
     /// </summary>
@@ -338,9 +358,23 @@ public sealed class VoxelGIPreset
     /// <summary>Range a volume starts at, before anyone touches it.</summary>
     public const float DefaultSpecularRange = 12f;
 
+    /// <summary>
+    /// The single cone traced for indirect specular (voxel reflections), optionally tighter than
+    /// the tier asks for.
+    /// </summary>
     /// <remarks>
+    /// The ratio is the aperture: at 1 the cone integrates whole mips and hands back the average
+    /// of the room, which is why a mirror under this tier shows a smear rather than a reflection;
+    /// as it goes to zero the cone closes into a ray march at the finest mip, and the reflection
+    /// sharpens. Aperture and steps are one setting in two halves: a cone advances by its own
+    /// current radius, so the aperture sets how fast it grows and therefore how far a fixed number
+    /// of steps reaches. Closing the cone from 1 to 0.25 makes it four times sharper and roughly
+    /// four times shorter; sharpen without adding steps and the ray dies a couple of metres out,
+    /// which reads as a black reflection rather than a blurry one.
+    /// <para>
     /// <paramref name="range"/> is passed straight through, unlike the other two: zero is a real
     /// setting here - it means no horizon at all - so it cannot double as "unset, use the preset".
+    /// </para>
     /// </remarks>
     public IVoxelMarchMethod CreateSpecularMarcher(float coneRatio = 0f, int steps = 0, float range = 0f)
         => new VoxelMarchCone(

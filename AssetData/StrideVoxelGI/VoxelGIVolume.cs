@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Nicogo. Distributed under the MIT license.
+// Copyright (c) 2026 Nicogo. Distributed under the MIT license.
 using System;
 using Stride.Core;
 using Stride.Core.Mathematics;
@@ -88,7 +88,8 @@ public class VoxelGIVolume : SyncScript
     /// <summary>
     /// The most rings this preset's resolution can carry. The storage gives each ring a column of
     /// its 3D texture (capped at 2048 per side) and shares its offset tables with the mipmaps, so
-    /// the ceiling moves with the resolution: thirteen at 128^3, eight at 256^3.
+    /// the ceiling moves with the resolution: fourteen at 32³, thirteen at 64³, twelve at 128³,
+    /// eight at 256³.
     /// </summary>
     [DataMemberIgnore]
     public int MaxClipMapLevels
@@ -535,8 +536,14 @@ public class VoxelGIVolume : SyncScript
         // One-voxel granularity: VoxelGridSnapping quantizes the voxelized volume to whole
         // voxels, so a sub-voxel move re-voxelizes to the exact same content - only an actual
         // grid crossing is a change worth waking up for.
+        // Clamped before the cast: a position far enough out, or a voxel small enough, would
+        // overflow the int and the volume would then wake on every frame or never.
         var gridPosition = Entity.Transform.Position / VoxelSize;
-        var snapped = new Int3((int)MathF.Floor(gridPosition.X), (int)MathF.Floor(gridPosition.Y), (int)MathF.Floor(gridPosition.Z));
+        const float reach = 1 << 30;
+        var snapped = new Int3(
+            (int)MathF.Floor(Math.Clamp(gridPosition.X, -reach, reach)),
+            (int)MathF.Floor(Math.Clamp(gridPosition.Y, -reach, reach)),
+            (int)MathF.Floor(Math.Clamp(gridPosition.Z, -reach, reach)));
         if (snapped != lastSnappedPosition)
         {
             lastSnappedPosition = snapped;

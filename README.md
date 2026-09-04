@@ -7,7 +7,7 @@ Real-time global illumination for [Stride](https://www.stride3d.net/), in one co
 Stride already contains a full voxel cone tracing implementation (`Stride.Voxels`, by Sean
 Boettger) — it just ships switched off, undocumented, and spread over about a dozen types you have
 to assemble in the right order before a single photon bounces. This asset is that assembly: a
-`VoxelGIVolume` component, four quality presets, a ready-made graphics compositor, and a Cornell
+`VoxelGIVolume` component, six quality presets, a ready-made graphics compositor, and a Cornell
 box demo where you can toggle the indirect light on and off with one key.
 
 ## What's in the box
@@ -15,7 +15,7 @@ box demo where you can toggle the indirect light on and off with one key.
 | File | Role |
 |------|------|
 | `VoxelGIVolume` | The component. Drop it on an entity: it builds the `VoxelVolumeComponent` that voxelizes the world around it and the `LightVoxel` environment light that cone-traces it back. Every knob you actually tune is on it. |
-| `VoxelGIPreset` / `VoxelGIQuality` | Low / Medium / High / Ultra, each a coherent set of clipmap resolution, voxel layout and cone count. Also the place to hand-roll a tier of your own. |
+| `VoxelGIPreset` / `VoxelGIQuality` | Potato / Low / Medium / High / Ultra / Ultra+, each a coherent set of clipmap resolution, voxel layout, storage format and cone count. Also the place to hand-roll a tier of your own. |
 | `VoxelGIDebug` | Hotkeys and an on-screen readout: toggle GI, ray-march the voxels, freeze voxelization, cycle quality, push the bounce. Pure debug — delete it and nothing changes. |
 | `Demo/Assets/GraphicsCompositor.sdgfxcomp` | A flattened, self-contained voxel compositor. This is the part people get stuck on. |
 
@@ -64,7 +64,7 @@ lowers it, with `Shift` it rises (enum keys cycle back and forth the same way).
 | `V` / `X` `+-` | Voxel views (off → ray-marched → raw slice) / raw view mip level. |
 | `P` `+-`, `N` | Stride's profiler pages (off / FPS / CPU / GPU); `N` next result page, `Shift`+`N` first. |
 | `Ctrl`+`S` | Save a PNG of the frame to `Screenshots/`. |
-| right-drag, `WASD`/`ZQSD` | Fly the camera. The keyboard only moves it while the right button is held, so the letter keys above stay free the rest of the time. `C` and `E`/`Space` go down and up, `Shift` goes faster. |
+| right-drag, `WASD`/`ZQSD` | Fly the camera. `C` and `E`/`Space` go down and up, `Shift` goes faster. |
 
 ## The knobs that matter
 
@@ -79,11 +79,13 @@ lowers it, with `Shift` it rises (enum keys cycle back and forth the same way).
   the cheap way to finer voxels: memory grows linearly with rings and cubically with resolution,
   so eight rings at 128³ resolve eight times finer than five for a fraction of what 256³ costs.
   The ceiling is `MaxClipMapLevels` (twelve at 128³, eight at 256³), set by how much of a 3D
-  texture Direct3D11 will allocate.
+  texture Direct3D11 will allocate. Or go the other way: **Potato** is 32³ in 10-bit storage,
+  traced at a quarter of the screen, for machines where the atlas and the cones both have to be
+  cheap.
 - **`GIResolutionDivisor`** — trace the diffuse cones into a buffer 1/N of the screen and read it
   back when shading, instead of tracing per shaded pixel. 2 costs a quarter of the cones, 4 a
   sixteenth, for softer silhouettes. Needs a depth-only stage on the compositor; without one the
-  light quietly keeps marching inline.
+  light keeps marching inline and says so once in the log.
 - **`BounceIntensity`** — Stride's own `LightVoxel.BounceIntensityScale` defaults to **0**, which
   is why a hand-built voxel GI setup renders exactly nothing. Here it defaults to 1.
 - **Directional storage** (`Directionality`, paired on High and above) — stores three directional
@@ -145,7 +147,7 @@ Demo.exe --capture --profiler=gpu --quality=ultra
 |--------|------|
 | `--capture` | Walk the camera through five viewpoints, save a PNG at each, then exit. |
 | `--profiler=gpu\|cpu\|fps` | Open Stride's profiler at startup, so the shots carry the timings. |
-| `--quality=low\|medium\|high\|ultra`, `--divisor=N`, `--levels=N`, `--volume=N` | Override the volume's settings before capturing. |
+| `--quality=potato\|low\|medium\|high\|ultra\|ultraplus`, `--divisor=N`, `--levels=N`, `--volume=N` | Override the volume's settings before capturing. |
 | `--quality-cycle` | Hold the camera still and switch tier at each stop, to compare presets. |
 | `--dump-gi` | Also save what the reduced-resolution GI pass wrote — the first place to look when the image has artefacts the full-rate path does not. |
 | `--no-gi`, `--view=cones\|raw` | Capture with the bounce off, or through a voxel debug view. |

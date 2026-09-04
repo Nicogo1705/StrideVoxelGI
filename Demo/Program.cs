@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Globalization;
 using System.Linq;
 using Demo;
@@ -34,7 +34,7 @@ using StrideVoxelGI;
 //   --out=DIR              where the PNGs go (default Screenshots next to the executable)
 //   --res=WxH              render at this size instead of the one in GameSettings
 //   --pivot=N              distance ahead of the camera the tour treats as its subject
-//   --quality=low|medium|high|ultra   switch the volume to that preset first
+//   --quality=potato|low|medium|high|ultra|ultraplus   switch the volume to that preset first
 //   --divisor=1|2|4        trace the diffuse cones at 1/N of the screen and upsample
 //   --igpu                 keep whatever GPU Windows hands out instead of asking for the best one
 //
@@ -86,10 +86,12 @@ static VoxelGIDebugView? ParseView(string? value) => value?.ToLowerInvariant() s
 
 static VoxelGIQuality? ParseQuality(string? value) => value?.ToLowerInvariant() switch
 {
+    "potato" => VoxelGIQuality.Potato,
     "low" => VoxelGIQuality.Low,
     "medium" => VoxelGIQuality.Medium,
     "high" => VoxelGIQuality.High,
     "ultra" => VoxelGIQuality.Ultra,
+    "ultraplus" => VoxelGIQuality.UltraPlus,
     _ => null,
 };
 

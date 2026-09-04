@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -128,10 +128,6 @@ public class CaptureTour : SyncScript
         startPosition = Entity.Transform.Position;
         startRotation = Entity.Transform.Rotation;
 
-        debug = FindInScene<VoxelGIDebug>();
-
-        if (debug is not null && !string.IsNullOrWhiteSpace(OutputDirectory))
-            debug.ScreenshotDirectory = OutputDirectory;
     }
 
     public override void Update()
@@ -150,6 +146,12 @@ public class CaptureTour : SyncScript
 
             frames = 0;
             ready = true;
+
+            // Looked up here rather than in Start: the shell mounts the demo's scene after this
+            // script starts, so at Start there is nothing to find.
+            debug = FindInScene<VoxelGIDebug>();
+            if (debug is not null && !string.IsNullOrWhiteSpace(OutputDirectory))
+                debug.ScreenshotDirectory = OutputDirectory;
 
             if ((Quality is not null || GIResolutionDivisor > 0 || DisableGI || View is not null || VolumeSize > 0 || ClipMapLevels > 0)
                 && FindInScene<VoxelGIVolume>() is { } volume)
@@ -312,7 +314,7 @@ public class CaptureTour : SyncScript
         // Comparing tiers means holding the camera still and changing only the preset.
         if (CycleQuality)
         {
-            foreach (var tier in new[] { VoxelGIQuality.Low, VoxelGIQuality.Medium, VoxelGIQuality.High, VoxelGIQuality.Ultra })
+            foreach (var tier in new[] { VoxelGIQuality.Potato, VoxelGIQuality.Low, VoxelGIQuality.Medium, VoxelGIQuality.High, VoxelGIQuality.Ultra })
                 stops.Add((tier.ToString().ToLowerInvariant(), eye, rotation));
 
             return;
@@ -411,7 +413,18 @@ public class CaptureTour : SyncScript
     private T? FindInScene<T>() where T : EntityComponent
     {
         var scene = SceneSystem.SceneInstance?.RootScene;
-        return scene is null ? null : Find(scene.Entities);
+        return scene is null ? null : FindInScene(scene);
+
+        // The shell keeps each demo in a child scene of the root, so those are searched too.
+        static T? FindInScene(Scene scene)
+        {
+            if (Find(scene.Entities) is { } found)
+                return found;
+            foreach (var child in scene.Children)
+                if (FindInScene(child) is { } inChild)
+                    return inChild;
+            return null;
+        }
 
         static T? Find(IEnumerable<Entity> entities)
         {
