@@ -360,13 +360,18 @@ public static class VoxelGridDemo
     /// <summary>Start with the sun and the ambient off, from --gi-only, so the field is lit by what it emits.</summary>
     public static bool StartWithLights { get; set; } = true;
 
-    private static readonly List<LightComponent> sceneLights = [];
+    private static readonly List<(LightComponent Light, float Intensity)> sceneLights = [];
 
     /// <summary>Whether the scene's own lights - the sun and the ambient - are on.</summary>
     public static bool LightsEnabled
     {
-        get => sceneLights.Count > 0 && sceneLights[0].Enabled;
-        set { foreach (var light in sceneLights) light.Enabled = value; }
+        get => sceneLights.Count > 0 && sceneLights[0].Light.Intensity > 0f;
+        // Off is intensity zero, not Enabled = false. A light that leaves the scene changes the
+        // lighting permutation of every material, and each of the grid's materials then recompiles
+        // its forward shader - with the GI on, that was the pause behind the L key. At zero the light
+        // stays in the permutation and contributes nothing, so the toggle costs a frame, not a
+        // compile. The sun's shadow map is still rendered while it is dark, which is cheap next to it.
+        set { foreach (var (light, intensity) in sceneLights) light.Intensity = value ? intensity : 0f; }
     }
 
     private static VoxelGridComponent? grid;
@@ -638,8 +643,8 @@ public static class VoxelGridDemo
 
         // Both on one switch, so the field can be seen lit by nothing but what it emits.
         sceneLights.Clear();
-        sceneLights.Add(sun.Get<LightComponent>());
-        sceneLights.Add(ambient.Get<LightComponent>());
+        sceneLights.Add((sun.Get<LightComponent>(), sun.Get<LightComponent>().Intensity));
+        sceneLights.Add((ambient.Get<LightComponent>(), ambient.Get<LightComponent>().Intensity));
         LightsEnabled = StartWithLights;
 
         // -- an ordinary mesh, standing half inside the volume ---------------------------------
