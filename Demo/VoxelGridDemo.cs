@@ -200,7 +200,9 @@ public static class VoxelGridDemo
                     DiffuseModel = new MaterialDiffuseLambertModelFeature(),
                     MicroSurface = new MaterialGlossinessMapFeature(new ComputeFloat(glossiness)),
                     Specular = new MaterialMetalnessMapFeature(new ComputeFloat(metalness)),
-                    SpecularModel = new MaterialSpecularMicrofacetModelFeature(),
+                    // The polynomial environment term, as the gallery's palette: the default LUT
+                    // reads a DFG texture nothing supplies to a material built at runtime.
+                    SpecularModel = new MaterialSpecularMicrofacetModelFeature { Environment = new MaterialSpecularMicrofacetEnvironmentGGXPolynomial() },
                     Emissive = emissive is { } glow ? new MaterialEmissiveMapFeature(new ComputeColor(glow)) { Intensity = new ComputeFloat(intensity), UseAlpha = false } : null,
                 },
             };
