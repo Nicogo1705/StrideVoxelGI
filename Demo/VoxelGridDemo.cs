@@ -63,7 +63,8 @@ public static class VoxelGridDemo
 
     /// <summary>
     /// A field worth looking at: rolling ground, a big sphere half sunk into it, and an arch, each
-    /// with its own material id so the packed source has something to colour.
+    /// with its own material id so the packed source has something to colour, and a white lamp
+    /// pillar in each corner.
     /// </summary>
     public static ushort[] Generate()
     {
@@ -93,7 +94,16 @@ public static class VoxelGridDemo
                     var ring = new Vector2(toCentre.Length() - 4.0f, p.Y - Extent * 0.30f);
                     var arch = Saturate((1.1f - ring.Length()) * 1.2f);
 
-                    var density = MathF.Max(ground, MathF.Max(sphere, arch));
+                    // A white pillar in each corner: a lamp per corner, so the far reaches of the
+                    // field get light from somewhere when the arch is the only other emitter.
+                    var inset = 1.5f;
+                    var cornerX = MathF.Min(MathF.Abs(p.X - inset), MathF.Abs(p.X - (Extent - inset)));
+                    var cornerZ = MathF.Min(MathF.Abs(p.Z - inset), MathF.Abs(p.Z - (Extent - inset)));
+                    var pillarRadial = 0.7f - MathF.Max(cornerX, cornerZ);
+                    var pillarVertical = MathF.Min(p.Y, Extent * 0.55f - p.Y);
+                    var pillar = Saturate(MathF.Min(pillarRadial, pillarVertical) * 1.2f);
+
+                    var density = MathF.Max(MathF.Max(ground, pillar), MathF.Max(sphere, arch));
                     // Decided with a margin, not on equality. Where two of the three shapes have
                     // almost the same value - which is a whole shell around every intersection -
                     // comparing them directly flips from one cell to the next on nothing but the
@@ -101,6 +111,7 @@ public static class VoxelGridDemo
                     // cell, so it appears as speckle exactly where two materials meet.
                     const float margin = 0.05f;
                     var material = density <= 0f ? 0
+                                 : pillar > ground + margin ? 4
                                  : arch > sphere + margin && arch > ground + margin ? 3
                                  : sphere > ground + margin ? 2
                                  : 1;
@@ -202,6 +213,7 @@ public static class VoxelGridDemo
             Make(device, new Color4(0.10f, 0.75f, 0.95f, 1f), 0.35f, 0f),                                  // 1: the ground
             Make(device, new Color4(0.85f, 0.90f, 0.15f, 1f), 0.6f, 0.2f),                                 // 2: the sphere, a little glossy
             Make(device, new Color4(1.00f, 0.00f, 0.88f, 1f), 0.4f, 0f, new Color4(1f, 0f, 0.88f, 1f), 6f), // 3: the arch, which glows
+            Make(device, new Color4(1f, 1f, 1f, 1f), 0.3f, 0f, new Color4(1f, 1f, 1f, 1f), 4f),             // 4: the corner pillars, white lamps
         ];
     }
 
