@@ -200,7 +200,7 @@ public static class VoxelGridDemo
             Make(device, new Color4(0f, 0f, 0f, 1f), 0f, 0f),                                              // 0: air, never at a surface
             Make(device, new Color4(0.10f, 0.75f, 0.95f, 1f), 0.35f, 0f),                                  // 1: the ground
             Make(device, new Color4(0.85f, 0.90f, 0.15f, 1f), 0.6f, 0.2f),                                 // 2: the sphere, a little glossy
-            Make(device, new Color4(1.00f, 0.00f, 0.88f, 1f), 0.4f, 0f, new Color4(1f, 0f, 0.88f, 1f), 8f), // 3: the arch, which glows
+            Make(device, new Color4(1.00f, 0.00f, 0.88f, 1f), 0.4f, 0f, new Color4(1f, 0f, 0.88f, 1f), 6f), // 3: the arch, which glows
         ];
     }
 
@@ -408,11 +408,15 @@ public static class VoxelGridDemo
         giVolume.Transform.Position = cameraEntity.Transform.Position;
         giVolume.Add(new VoxelGIVolume
         {
-            // Twice the grid, so the finest ring - an eighth of it at four levels - is eight units
-            // across at the grid's own cell size, and the coarser rings still cover the whole field.
-            VolumeSize = Extent * 2f,
-            ClipMapLevels = 4,
-            Quality = VoxelGIQuality.High,
+            // The gallery's settings, which the hall settled on after trying both ends: consistent
+            // and coarse beats fine and seamed. Four times the grid at three levels puts the finest
+            // ring over the whole field at once, so following the camera has little to re-snap.
+            VolumeSize = Extent * 4f,
+            ClipMapLevels = 3,
+            Quality = VoxelGIQuality.UltraPlus,
+            SpecularSteps = 576,
+            SpecularRange = 24f,
+            SpecularRoughnessCutoff = 1.0f,
             AutoFreeze = false,
             Follow = cameraEntity.Transform,
         });
