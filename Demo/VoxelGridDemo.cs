@@ -214,8 +214,8 @@ public static class VoxelGridDemo
             Make(device, new Color4(0f, 0f, 0f, 1f), 0f, 0f),                                              // 0: air, never at a surface
             Make(device, new Color4(0.10f, 0.75f, 0.95f, 1f), 0.35f, 0f),                                  // 1: the ground
             Make(device, new Color4(0.85f, 0.90f, 0.15f, 1f), 0.6f, 0.2f),                                 // 2: the sphere, a little glossy
-            Make(device, new Color4(1.00f, 0.00f, 0.88f, 1f), 0.4f, 0f, new Color4(1f, 0f, 0.88f, 1f), 6f), // 3: the arch, which glows
-            Make(device, new Color4(1f, 1f, 1f, 1f), 0.3f, 0f, new Color4(1f, 1f, 1f, 1f), 4f),             // 4: the corner pillars, white lamps
+            Make(device, new Color4(1.00f, 0.00f, 0.88f, 1f), 0.4f, 0f, new Color4(1f, 0f, 0.88f, 1f), 3f), // 3: the arch, which glows
+            Make(device, new Color4(1f, 1f, 1f, 1f), 0.3f, 0f, new Color4(1f, 1f, 1f, 1f), 2f),             // 4: the corner pillars, white lamps
         ];
     }
 
@@ -346,9 +346,10 @@ public static class VoxelGridDemo
     /// <summary>How much of the previous frame's light the injected field bounces; negative keeps the component's default.</summary>
     public static float StartInjectBounce { get; set; } = -1f;
     /// <summary>Where the GI cones start, in voxels from the surface; zero keeps the marchers' default.</summary>
-    // Three: at one, the cones of a polished sphere graze its own voxel shell at fixed angles as
-    // they climb the mips and the sphere wears rings; two leaves a trace, three clears them.
-    public static float StartConeOffset { get; set; } = 3f;
+    // Four: at one, the cones of a polished sphere graze its own voxel shell at fixed angles as
+    // they climb the mips and the sphere wears rings; three leaves a faint trace once the emitters
+    // are dim enough not to saturate it away, four clears it.
+    public static float StartConeOffset { get; set; } = 4f;
 
     /// <summary>Start with the GI volume around the camera, from --gi.</summary>
     public static bool StartWithGI { get; set; }

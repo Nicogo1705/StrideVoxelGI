@@ -249,7 +249,7 @@ game.Script.AddTask(async () =>
     VoxelGridDemo.StartWithShadows = !args.Contains("--no-shadows");
     VoxelGridDemo.StartWithInjection = !args.Contains("--no-inject");
     VoxelGridDemo.StartInjectBounce = ParseFloat(Option("--inject-bounce"), -1f);
-    VoxelGridDemo.StartConeOffset = ParseFloat(Option("--cone-offset"), 0f);
+    VoxelGridDemo.StartConeOffset = ParseFloat(Option("--cone-offset"), VoxelGridDemo.StartConeOffset);
     VoxelGridDemo.StartWithGI = args.Contains("--gi") || args.Contains("--gi-only");
     VoxelGridDemo.StartWithLights = !args.Contains("--gi-only");
 
