@@ -134,7 +134,7 @@ public static class VoxelGridDemo
         // fastest. Copying one into the other straight through transposes the field, and a
         // transposed field still draws - in bands, because along any ray the samples jump about -
         // which reads as an artefact of the tracing rather than as the data being wrong.
-        gpuTexels = new byte[samples.Length * 4];
+        gpuTexels = new byte[samples.Length * 2];
         for (int x = 0; x < Samples; ++x)
             for (int y = 0; y < Samples; ++y)
                 for (int z = 0; z < Samples; ++z)
@@ -145,7 +145,7 @@ public static class VoxelGridDemo
         // contents at creation is immutable, and the first dig then throws from inside SetData -
         // far from the line that decided it.
         gpuTexture = Texture.New3D(
-            game.GraphicsDevice, Samples, Samples, Samples, PixelFormat.R8G8B8A8_UNorm,
+            game.GraphicsDevice, Samples, Samples, Samples, PixelFormat.R8G8_UNorm,
             TextureFlags.ShaderResource, GraphicsResourceUsage.Default);
         UploadTexture(game.GraphicsContext.CommandList);
         return gpuTexture;
@@ -165,27 +165,43 @@ public static class VoxelGridDemo
             gpuTexture.SetData(commandList, gpuTexels);
     }
 
-    /// <summary>Density in red, the material's colour in the rest - what the texture source reads.</summary>
+    /// <summary>Density in red, the material id in green - what the texture source reads.</summary>
     private static void WriteTexel(byte[] texels, int index, ushort packed)
     {
-        var colour = MaterialColour(packed >> 8);
-        texels[index * 4 + 0] = (byte)(packed & 0xFF);
-        texels[index * 4 + 1] = (byte)(colour.X * 255f);
-        texels[index * 4 + 2] = (byte)(colour.Y * 255f);
-        texels[index * 4 + 3] = (byte)(colour.Z * 255f);
+        texels[index * 2 + 0] = (byte)(packed & 0xFF);
+        texels[index * 2 + 1] = (byte)(packed >> 8);
     }
 
-    /// <summary>The palette the packed buffer's shader computes, worked out here instead.</summary>
-    private static Vector3 MaterialColour(int material)
+    /// <summary>
+    /// The materials the field's ids point at, by id: air, ground, the sphere, the arch. Ordinary
+    /// materials, built here the way an asset would be authored; the grid reads their constants.
+    /// </summary>
+    private static List<Material> BuildMaterials(GraphicsDevice device)
     {
-        if (material == 0)
-            return Vector3.Zero;
+        static Material Make(GraphicsDevice device, Color4 colour, float glossiness, float metalness, Color4? emissive = null, float intensity = 0f)
+        {
+            var descriptor = new MaterialDescriptor
+            {
+                Attributes =
+                {
+                    Diffuse = new MaterialDiffuseMapFeature(new ComputeColor(colour)),
+                    DiffuseModel = new MaterialDiffuseLambertModelFeature(),
+                    MicroSurface = new MaterialGlossinessMapFeature(new ComputeFloat(glossiness)),
+                    Specular = new MaterialMetalnessMapFeature(new ComputeFloat(metalness)),
+                    SpecularModel = new MaterialSpecularMicrofacetModelFeature(),
+                    Emissive = emissive is { } glow ? new MaterialEmissiveMapFeature(new ComputeColor(glow)) { Intensity = new ComputeFloat(intensity), UseAlpha = false } : null,
+                },
+            };
+            return Material.New(device, descriptor);
+        }
 
-        var hue = (material * 0.6180339887f) % 1f;
-        return new Vector3(
-            Saturate(MathF.Abs(((hue + 0.0000f) % 1f) * 6f - 3f) - 1f),
-            Saturate(MathF.Abs(((hue + 0.6666f) % 1f) * 6f - 3f) - 1f),
-            Saturate(MathF.Abs(((hue + 0.3333f) % 1f) * 6f - 3f) - 1f));
+        return
+        [
+            Make(device, new Color4(0f, 0f, 0f, 1f), 0f, 0f),                                              // 0: air, never at a surface
+            Make(device, new Color4(0.10f, 0.75f, 0.95f, 1f), 0.35f, 0f),                                  // 1: the ground
+            Make(device, new Color4(0.85f, 0.90f, 0.15f, 1f), 0.6f, 0.2f),                                 // 2: the sphere, a little glossy
+            Make(device, new Color4(1.00f, 0.00f, 0.88f, 1f), 0.4f, 0f, new Color4(1f, 0f, 0.88f, 1f), 8f), // 3: the arch, which glows
+        ];
     }
 
     /// <summary>Widens the samples for the structured buffer the packed source reads.</summary>
@@ -355,6 +371,9 @@ public static class VoxelGridDemo
         get => grid?.CastShadows ?? StartWithShadows;
         set { if (grid is not null) grid.CastShadows = value; }
     }
+
+    /// <summary>The palette the drawn grid was given, for the traced pass to share.</summary>
+    public static VoxelGridPalette? ModelPalette => modelTraversal?.Palette;
 
     /// <summary>Whether a voxel GI volume is following the camera.</summary>
     public static bool GIEnabled => giVolume is not null;
@@ -593,10 +612,11 @@ public static class VoxelGridDemo
             },
             CastShadows = StartWithShadows,
             DebugView = DebugView,
-            // The arch emits; with the sun and the ambient off it is the only light there is, and
-            // with a GI volume around the camera it lights the field it stands on.
-            Emissive = new ComputeShaderClassColor { MixinReference = "VoxelEmissiveArch" },
         });
+
+        // The palette, by id. The arch emits; with the sun and the ambient off it is the only light
+        // there is, and with a GI volume around the camera it lights the field it stands on.
+        grid.Materials.AddRange(BuildMaterials(game.GraphicsDevice));
 
         // -- a light, because the drawn grid now needs one ------------------------------------
         // The traced pass lit itself from a direction it kept in its own parameters, which is exactly
@@ -785,6 +805,11 @@ public class VoxelGridPass : SceneRendererBase
     {
         if (!Enabled || Renderer is null)
             return;
+
+        // One palette for the field, built by the grid component from its material list; the
+        // traced pass reads the same one.
+        if (Renderer.Traversal is { Palette: null } shared)
+            shared.Palette = VoxelGridDemo.ModelPalette;
 
         var output = drawContext.CommandList.RenderTarget;
         if (output is null)
