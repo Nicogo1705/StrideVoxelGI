@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup>
+    <!-- Engine version shared by every project here. Override it to build against a local engine
+         checkout, whose auto-packed packages land in <stride>/bin/packages as 4.4.0-dev:
+           dotnet build Demo -p:StrideVersion=4.4.0-dev
+         (with a nuget.config that lists that folder as a package source). -->
+    <StrideVersion Condition="'$(StrideVersion)' == ''">4.4.0-beta5</StrideVersion>
+  </PropertyGroup>
+</Project>
