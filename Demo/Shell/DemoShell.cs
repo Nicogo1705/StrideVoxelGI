@@ -443,6 +443,10 @@ public sealed class DemoShell : SyncScript
             shooter.Poses.Add((centre + new Vector3(extent * 0.8f, extent * 0.30f, -extent * 0.55f), centre, "corner"));
             shooter.Poses.Add((centre + new Vector3(0, extent * 1.15f, -extent * 0.25f), centre, "above"));
             shooter.Poses.Add((centre + new Vector3(-extent * 0.2f, extent * 0.06f, -extent * 0.42f), centre, "grazing"));
+            // From well outside the box, and from far out: a field is walked from where the ray
+            // enters it, and both the reach and the float it walks with used to be the camera's.
+            shooter.Poses.Add((centre + new Vector3(extent * 1.2f, extent * 0.8f, -extent * 3.0f), centre, "far"));
+            shooter.Poses.Add((centre + new Vector3(extent * 3.0f, extent * 2.0f, -extent * 8.0f), centre, "veryfar"));
 
             // Close enough on the sphere that a cell is a good many pixels across. What goes wrong in
             // a traced surface goes wrong at the scale of one cell - a facet on the wrong plane, a
