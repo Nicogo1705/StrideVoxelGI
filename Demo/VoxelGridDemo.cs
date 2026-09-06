@@ -192,11 +192,17 @@ public static class VoxelGridDemo
     private static byte[] Downsample(byte[] source, int size, int next)
     {
         var result = new byte[next * next * next * 2];
+        DownsampleInto(source, size, result, next, new Int3(0), new Int3(next - 1));
+        return result;
+    }
+
+    /// <summary>The same, for the box [lo, hi] of the coarser level only, written into an existing array.</summary>
+    private static void DownsampleInto(byte[] source, int size, byte[] result, int next, Int3 lo, Int3 hi)
+    {
         int Index(int x, int y, int z) => ((z * size + y) * size + x) * 2;
-        Span<int> taps = stackalloc int[3];
-        for (int z = 0; z < next; ++z)
-            for (int y = 0; y < next; ++y)
-                for (int x = 0; x < next; ++x)
+        for (int z = lo.Z; z <= hi.Z; ++z)
+            for (int y = lo.Y; y <= hi.Y; ++y)
+                for (int x = lo.X; x <= hi.X; ++x)
                 {
                     int cx = Math.Min(x * 2, size - 1), cy = Math.Min(y * 2, size - 1), cz = Math.Min(z * 2, size - 1);
                     float sum = 0f, weight = 0f;
@@ -215,33 +221,73 @@ public static class VoxelGridDemo
                     result[o] = (byte)MathF.Round(sum / weight);
                     result[o + 1] = source[Index(cx, cy, cz) + 1];
                 }
-        return result;
     }
 
-    /// <summary>
-    /// Pushes the whole field to the GPU, the way a texture in default usage takes it.
-    /// </summary>
-    /// <remarks>
-    /// The whole field, because an edit is a ball and the array is contiguous in a different order
-    /// than the region would be. Small enough at this size that a partial update is not worth the
-    /// arithmetic; a game with real chunks would upload the box it touched.
-    /// </remarks>
     private static void UploadTexture(CommandList commandList)
     {
         if (gpuTexture == null || gpuTexels == null)
             return;
-        gpuTexture.SetData(commandList, gpuTexels);
 
-        // The whole chain again: a dig is a ball, and the levels are cheap next to the field.
-        var level = gpuTexels;
+        // The whole chain, once: each level is kept, so that a dig later recomputes and uploads
+        // only the box it touched at every level rather than the field.
+        mipTexels = new List<byte[]> { gpuTexels };
+        mipSizes = new List<int> { Samples };
+        gpuTexture.SetData(commandList, gpuTexels);
         var size = Samples;
         for (int mip = 1; mip < gpuTexture.MipLevelCount; mip++)
         {
             var next = Math.Max(size / 2, 1);
-            level = Downsample(level, size, next);
+            var level = Downsample(mipTexels[mip - 1], size, next);
+            mipTexels.Add(level);
+            mipSizes.Add(next);
             size = next;
             gpuTexture.SetData(commandList, level, 0, mip);
         }
+    }
+
+    private static List<byte[]>? mipTexels;
+    private static List<int>? mipSizes;
+
+    /// <summary>
+    /// Pushes a box of edited samples to the GPU: the box itself on the finest level, and on each
+    /// coarser level the box it maps to, recomputed from the level above, widened by one so the
+    /// filter's reach is covered. A stroke costs its own volume, not the field's.
+    /// </summary>
+    private static void UploadTexture(CommandList commandList, Int3 lo, Int3 hi)
+    {
+        if (gpuTexture == null || gpuTexels == null || mipTexels == null || mipSizes == null)
+        {
+            UploadTexture(commandList);
+            return;
+        }
+
+        UploadRegion(commandList, 0, lo, hi);
+        for (int mip = 1; mip < mipTexels.Count; mip++)
+        {
+            var size = mipSizes[mip - 1];
+            var next = mipSizes[mip];
+            lo = Int3.Max(new Int3(0), new Int3(lo.X >> 1, lo.Y >> 1, lo.Z >> 1) - new Int3(1));
+            hi = Int3.Min(new Int3(next - 1), new Int3((hi.X >> 1) + 1, (hi.Y >> 1) + 1, (hi.Z >> 1) + 1));
+            DownsampleInto(mipTexels[mip - 1], size, mipTexels[mip], next, lo, hi);
+            UploadRegion(commandList, mip, lo, hi);
+        }
+    }
+
+    /// <summary>One level's box, packed tightly as a region upload wants it.</summary>
+    private static void UploadRegion(CommandList commandList, int mip, Int3 lo, Int3 hi)
+    {
+        var size = mipSizes![mip];
+        var source = mipTexels![mip];
+        var w = hi.X - lo.X + 1;
+        var h = hi.Y - lo.Y + 1;
+        var d = hi.Z - lo.Z + 1;
+        if (w <= 0 || h <= 0 || d <= 0)
+            return;
+        var block = new byte[w * h * d * 2];
+        for (int z = 0; z < d; z++)
+            for (int y = 0; y < h; y++)
+                System.Buffer.BlockCopy(source, (((lo.Z + z) * size + (lo.Y + y)) * size + lo.X) * 2, block, ((z * h + y) * w) * 2, w * 2);
+        gpuTexture!.SetData(commandList, block, 0, mip, new ResourceRegion(lo.X, lo.Y, lo.Z, hi.X + 1, hi.Y + 1, hi.Z + 1));
     }
 
     /// <summary>Density in red, the material id in green - what the texture source reads.</summary>
@@ -305,9 +351,8 @@ public static class VoxelGridDemo
     /// and the bounds do not change - so the hole is solid on the same frame it is visible.
     /// </para>
     /// <para>
-    /// The whole buffer goes back to the GPU here, which a real game would not do: it would upload
-    /// the touched region, or hold the field in a 3D texture and write the box. At a megabyte a
-    /// stroke it is not what this demo is trying to show.
+    /// Only the touched box goes back to the GPU, at every level of the texture: a stroke costs
+    /// its own volume, not the field's, which at 257 samples a side was a second per dig.
     /// </para>
     /// </remarks>
     public static void Edit(IGame game, Vector3 centre, float radius, bool fill)
@@ -378,7 +423,7 @@ public static class VoxelGridDemo
         if (!touched)
             return;
 
-        UploadTexture(game.GraphicsContext.CommandList);
+        UploadTexture(game.GraphicsContext.CommandList, new Int3(x0, y0, z0), new Int3(x1, y1, z1));
 
         // The pyramid over the box the brush touched, and nothing outside it.
         occupancy?.Update(game.GraphicsContext.CommandList, ReadDensity, new Int3(x0, y0, z0), new Int3(x1, y1, z1));
