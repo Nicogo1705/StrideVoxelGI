@@ -472,6 +472,9 @@ public sealed class DemoShell : SyncScript
             // enters it, and both the reach and the float it walks with used to be the camera's.
             shooter.Poses.Add((centre + new Vector3(extent * 1.2f, extent * 0.8f, -extent * 3.0f), centre, "far"));
             shooter.Poses.Add((centre + new Vector3(extent * 3.0f, extent * 2.0f, -extent * 8.0f), centre, "veryfar"));
+            // The pose handed in on the command line, as Ctrl+S wrote it: the view someone found by hand.
+            if (VoxelGridDemo.StartPose is { } start)
+                shooter.Poses.Add((start.Position, start.Position + Vector3.Transform(-Vector3.UnitZ, start.Rotation), "pose"));
             // Looking exactly along a grid axis from a cell plane: the centre column's ray then lies
             // on that plane, which a walk once took for its own exit and never left.
             shooter.Poses.Add((new Vector3(extent * 0.5f, extent * 0.75f, -extent * 0.35f), new Vector3(extent * 0.5f, extent * 0.35f, extent * 0.5f), "axis"));
