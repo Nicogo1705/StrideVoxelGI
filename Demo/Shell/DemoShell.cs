@@ -309,11 +309,8 @@ public sealed class DemoShell : SyncScript
 
             // The camera's pose beside the image, as --pose takes it, so a view found by hand can
             // be handed back to a capture run. The demo's own camera, not the menu's.
-            // Every entity of every scene: a demo's camera lives in the demo's own scene.
-            var camera = HostGame.SceneSystem.SceneInstance
-                .Where(e => e.Name != MenuCameraName)
-                .Select(e => e.Get<CameraComponent>())
-                .FirstOrDefault(c => c is { Enabled: true });
+            // The camera the compositor is drawing through, whichever scene it lives in.
+            var camera = HostGame.SceneSystem.GraphicsCompositor?.Cameras.FirstOrDefault()?.Camera;
             if (camera is not null)
             {
                 var p = camera.Entity.Transform.Position;
@@ -328,6 +325,7 @@ public sealed class DemoShell : SyncScript
             screenshotStatus = $"screenshot failed: {exception.Message}";
         }
 
+        Log.Info(screenshotStatus);
         screenshotStatusLeft = 4f;
     }
 
