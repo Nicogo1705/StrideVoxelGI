@@ -32,6 +32,7 @@ public class PostEffectsToggle : SyncScript
 
     public override void Start()
     {
+        Shell.DemoOverlay.Register("post", Shell.OverlayAnchor.BottomRight, () => status is null ? [] : [status]);
         effects = FindPostEffects(SceneSystem.GraphicsCompositor?.Game);
     }
 
@@ -51,13 +52,15 @@ public class PostEffectsToggle : SyncScript
                 antialiasing.Enabled = state is 0 or 1;
         }
 
-        // Bottom right, which no scene uses. Printed at a fixed spot in the top left column it sat
-        // on the voxel GI overlay's own lines, and the two read as one garbled line.
-        var line = $"[{CycleKey}] Post : bloom {(effects.Bloom.Enabled ? "on" : "off")}, antialiasing {(effects.Antialiasing?.Enabled == true ? "on" : "off")}";
-        var back = GraphicsDevice.Presenter?.BackBuffer;
-        var width = back?.Width ?? 1920;
-        var height = back?.Height ?? 1080;
-        DebugText.Print(line, new Stride.Core.Mathematics.Int2(width - 16 - line.Length * 8, height - 36));
+        status = $"[{CycleKey}] Post : bloom {(effects.Bloom.Enabled ? "on" : "off")}, antialiasing {(effects.Antialiasing?.Enabled == true ? "on" : "off")}";
+    }
+
+    private string? status;
+
+    public override void Cancel()
+    {
+        Shell.DemoOverlay.Unregister("post");
+        base.Cancel();
     }
 
     /// <summary>

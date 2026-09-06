@@ -140,6 +140,7 @@ public sealed class DemoShell : SyncScript
         // Every key list and the voxel GI panel go through it, so a Release build had no UI at all.
         DebugText.Visible = true;
 
+        RegisterOverlay();
         var regular = Content.Load<SpriteFont>("MenuFont");
         var bold = Content.Load<SpriteFont>("MenuFontBold");
 
@@ -244,31 +245,19 @@ public sealed class DemoShell : SyncScript
         if ((Input.IsKeyDown(Keys.LeftCtrl) || Input.IsKeyDown(Keys.RightCtrl)) && Input.IsKeyPressed(ScreenshotKey))
             TakeScreenshot();
 
-        // Along the bottom, not the top, and the whole list: every key a demo answers to is here,
-        // in the same place in every demo, with the shell's own tools on the first line.
-        //
-        // Two of the three demos run the voxel GI package, which draws its own list of settings down
-        // the top left corner. Printing here as well put two overlays through each other, both
-        // unreadable. The bottom is empty in every scene, and staying out of the way is cheaper than
-        // asking each scene where it has room.
-        var lines = DemoCatalog.Entries[running.Value].Controls;
-        var extra = (running == DemoCatalog.VoxelGrid ? 4 : 0) + (screenshotStatus is null ? 0 : 1);
-        var y = ScreenHeight - 16 - (lines.Length + extra) * LineHeight;
-
-        foreach (var line in lines)
-        {
-            DebugText.Print(line, new Int2(16, y));
-            y += LineHeight;
-        }
-
         if (screenshotStatus is not null)
         {
-            DebugText.Print(screenshotStatus, new Int2(16, y));
-            y += LineHeight;
-
             screenshotStatusLeft -= (float)Game.UpdateTime.Elapsed.TotalSeconds;
             if (screenshotStatusLeft <= 0)
                 screenshotStatus = null;
+        }
+
+        // A voxel GI readout in the scene is laid out by the overlay, down the right edge, so it
+        // and the engine's profiler on the left can be read at once.
+        foreach (var entity in HostGame.SceneSystem.SceneInstance)
+        {
+            if (entity.Get<VoxelGIDebug>() is { } debug)
+                debug.DrawsOverlay = false;
         }
 
         // The grid's switches are static, so their keys live here rather than on a script.
@@ -289,14 +278,51 @@ public sealed class DemoShell : SyncScript
             if (Input.IsKeyPressed(Keys.L))
                 VoxelGridDemo.LightsEnabled = !VoxelGridDemo.LightsEnabled;
 
-            // Both on screen at once, because the whole point of being able to change them is to see
-            // where the drawn body and the solid one agree and where they do not.
-            DebugText.Print($"drawn    [B] : {VoxelGridDemo.Surface}", new Int2(16, y));
-            DebugText.Print($"collider [C] : {VoxelGridDemo.ColliderForm}", new Int2(16, y + LineHeight));
-            DebugText.Print($"aim          : {VoxelGridDemo.AimStatus}", new Int2(16, y + LineHeight * 2));
-            DebugText.Print($"shadows  [O] : {(VoxelGridDemo.CastShadows ? "cast" : "not cast")}      voxel GI [G] : {(VoxelGridDemo.GIEnabled ? "around the camera" : "off")}      lights [L] : {(VoxelGridDemo.LightsEnabled ? "sun and ambient" : "the arch alone")}      boundary [N] : {VoxelGridDemo.Dither}", new Int2(16, y + LineHeight * 3));
         }
 
+    }
+
+    /// <summary>
+    /// The overlay's sections: every key a demo answers to along the bottom, in the same place in
+    /// every demo, with the shell's own tools on the first line; under it, what the grid scene has
+    /// to say about its state; and any voxel GI readout down the right edge.
+    /// </summary>
+    private void RegisterOverlay()
+    {
+        DemoOverlay.Register("controls", OverlayAnchor.BottomLeft, () =>
+        {
+            if (running is not { } index)
+                return [];
+            var lines = DemoCatalog.Entries[index].Controls.ToList();
+            if (screenshotStatus is not null)
+                lines.Add(screenshotStatus);
+            return lines;
+        }, order: 0);
+
+        // Both on screen at once, because the whole point of being able to change them is to see
+        // where the drawn body and the solid one agree and where they do not.
+        DemoOverlay.Register("grid", OverlayAnchor.BottomLeft, () => running == DemoCatalog.VoxelGrid
+            ?
+            [
+                $"drawn    [B] : {VoxelGridDemo.Surface}",
+                $"collider [C] : {VoxelGridDemo.ColliderForm}",
+                $"aim          : {VoxelGridDemo.AimStatus}",
+                $"shadows  [O] : {(VoxelGridDemo.CastShadows ? "cast" : "not cast")}",
+                $"voxel GI [G] : {(VoxelGridDemo.GIEnabled ? "around the camera" : "off")}",
+                $"lights   [L] : {(VoxelGridDemo.LightsEnabled ? "sun and ambient" : "the arch alone")}",
+                $"boundary [N] : {VoxelGridDemo.Dither}",
+            ]
+            : [], order: 1);
+
+        DemoOverlay.Register("gi", OverlayAnchor.TopRight, () =>
+        {
+            foreach (var entity in HostGame.SceneSystem.SceneInstance)
+            {
+                if (entity.Get<VoxelGIDebug>() is { } debug)
+                    return debug.OverlayLines;
+            }
+            return [];
+        });
     }
 
     private void TakeScreenshot()

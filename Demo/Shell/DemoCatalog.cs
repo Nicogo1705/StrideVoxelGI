@@ -43,7 +43,7 @@ public static class DemoCatalog
     private const string Flight = "Right mouse  look      WASD / ZQSD  fly      E / Space  up      C  down      Shift  fast";
 
     /// <summary>The voxel GI overlay's keys, under Ctrl in every demo that runs it.</summary>
-    private const string GISettings = "Ctrl + key  GI settings, listed top left";
+    private const string GISettings = "Ctrl + key  GI settings, listed above";
 
     public static IReadOnlyList<DemoEntry> Entries { get; } =
     [

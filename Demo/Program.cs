@@ -297,6 +297,7 @@ game.Script.AddTask(async () =>
 
     scene.Entities.Add(new Entity("Shell")
     {
+        new DemoOverlay(),
         new DemoShell
         {
             StartWith = requested,

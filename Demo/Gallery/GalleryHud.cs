@@ -27,6 +27,8 @@ public class GalleryHud : SyncScript
 
     public override void Start()
     {
+        Shell.DemoOverlay.Register("gallery-card", Shell.OverlayAnchor.Centre, () => cardLines, offset: new Int2(-300, -300));
+        Shell.DemoOverlay.Register("gallery-caption", Shell.OverlayAnchor.Centre, () => captionLines, offset: new Int2(-220, 150));
         Collect(SceneSystem.SceneInstance?.RootScene);
     }
 
@@ -40,37 +42,39 @@ public class GalleryHud : SyncScript
             .Select(pair => pair.exhibit)
             .FirstOrDefault();
 
-        var size = GraphicsDevice.Presenter.BackBuffer;
-        var centre = new Int2(size.Width / 2, size.Height / 2);
-
         // The keys are the shell's list, along the bottom like every other demo's; the card only
         // says where to look.
+        cardLines.Clear();
         if (openingCard > 0)
         {
             openingCard -= (float)Game.UpdateTime.Elapsed.TotalSeconds;
-            DebugText.Print("THE CABINET OF LIGHTS", new Int2(centre.X - 130, 120));
-            DebugText.Print("twenty pieces on what light does when nobody is looking at it", new Int2(centre.X - 300, 148));
-            DebugText.Print("mouse to look around - the rest of the controls are in the bottom left corner", new Int2(centre.X - 300, 176));
+            cardLines.Add("          THE CABINET OF LIGHTS");
+            cardLines.Add("twenty pieces on what light does when nobody is looking at it");
+            cardLines.Add("mouse to look around - the rest of the controls are down the right edge");
         }
 
+        captionLines.Clear();
         if (nearest is null)
             return;
 
-        DebugText.Print($"{nearest.Number:00}   {nearest.Title}", new Int2(centre.X - 220, centre.Y + 150));
-        DebugText.Print(nearest.Caption, new Int2(centre.X - 220, centre.Y + 176));
+        captionLines.Add($"{nearest.Number:00}   {nearest.Title}");
+        captionLines.Add(nearest.Caption);
+        captionLines.Add(nearest.IsInteractive ? $"[{InteractKey}] {nearest.Prompt}" : "case sealed");
+        captionLines.Add("");
+        DrawMaterials(nearest);
 
-        if (!nearest.IsInteractive)
-        {
-            DebugText.Print("case sealed", new Int2(centre.X - 220, centre.Y + 204));
-            DrawMaterials(nearest, centre);
-            return;
-        }
-
-        DebugText.Print($"[{InteractKey}] {nearest.Prompt}", new Int2(centre.X - 220, centre.Y + 204));
-        DrawMaterials(nearest, centre);
-
-        if (Input.IsKeyPressed(InteractKey))
+        if (nearest.IsInteractive && Input.IsKeyPressed(InteractKey))
             nearest.Press();
+    }
+
+    private readonly List<string> cardLines = new();
+    private readonly List<string> captionLines = new();
+
+    public override void Cancel()
+    {
+        Shell.DemoOverlay.Unregister("gallery-card");
+        Shell.DemoOverlay.Unregister("gallery-caption");
+        base.Cancel();
     }
 
     /// <summary>The alcove's own shell, which every case shares and nobody came to read.</summary>
@@ -86,7 +90,7 @@ public class GalleryHud : SyncScript
     /// the same plaster and stone, and repeating it under twenty plaques would bury the one line
     /// that differs.
     /// </remarks>
-    private void DrawMaterials(GalleryExhibit exhibit, Int2 centre)
+    private void DrawMaterials(GalleryExhibit exhibit)
     {
         if (GalleryScene.Palette is not { } palette)
             return;
@@ -113,12 +117,8 @@ public class GalleryHud : SyncScript
 
         Collect(exhibit.Entity, true);
 
-        var y = centre.Y + 236;
         foreach (var spec in seen.Take(4))
-        {
-            DebugText.Print(spec.ToString(), new Int2(centre.X - 220, y));
-            y += 18;
-        }
+            captionLines.Add(spec.ToString());
     }
 
     private void Collect(Scene? scene)

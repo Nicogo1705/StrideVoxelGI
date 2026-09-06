@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Nicogo. Distributed under the MIT license.
 using System;
+using System.Collections.Generic;
 using System.IO;
 using Stride.Core;
 using Stride.Core.Mathematics;
@@ -47,6 +48,20 @@ public class VoxelGIDebug : SyncScript
     /// <summary>Draw the readout in the corner of the screen.</summary>
     [DataMember(20)]
     public bool ShowOverlay { get; set; } = true;
+
+    /// <summary>
+    /// Whether this component prints its readout itself, at <see cref="OverlayPosition"/>. A host
+    /// with an overlay of its own turns this off and lays out <see cref="OverlayLines"/> where it
+    /// wants them; the lines are built either way.
+    /// </summary>
+    [DataMemberIgnore]
+    public bool DrawsOverlay { get; set; } = true;
+
+    /// <summary>The readout, one entry per line, rebuilt every frame. Empty while <see cref="ShowOverlay"/> is off.</summary>
+    [DataMemberIgnore]
+    public IReadOnlyList<string> OverlayLines => overlayLines;
+
+    private readonly List<string> overlayLines = new();
 
     /// <summary>Top-left corner of the readout, in pixels.</summary>
     [DataMember(30)]
@@ -453,25 +468,37 @@ public class VoxelGIDebug : SyncScript
 
     private void DrawOverlay(VoxelGIVolume target)
     {
+        overlayLines.Clear();
         if (!ShowOverlay)
             return;
 
-        // The profiler draws its report in the same corner; two overlapping walls of text help
-        // no one. While it is up, yield the screen - P still cycles it, N pages through it. The
-        // engine's own flag rather than this script's page: the shell opens the same profiler
-        // from F2, and that one must clear the corner too. The frame-rate page is a single line,
-        // so the overlay stays under it.
+        void Print(string text) => overlayLines.Add(text);
+        BuildOverlay(target, Print);
+
+        if (!DrawsOverlay)
+            return;
+
+        // Drawing it here, in the top left: the profiler draws its report in the same corner,
+        // and two overlapping walls of text help no one. While it is up, yield the screen - P
+        // still cycles it, N pages through it. The engine's own flag rather than this script's
+        // page: the shell opens the same profiler from F2, and that one must clear the corner
+        // too. The frame-rate page is a single line, so the overlay stays under it. A host
+        // laying the lines out elsewhere keeps both.
         if (GameProfiler.Visible && GameProfiler.FilteringMode != GameProfilingResults.Fps)
             return;
 
         var line = OverlayPosition;
         if (GameProfiler.Visible)
             line.Y += 18;
-        void Print(string text)
+        foreach (var text in overlayLines)
         {
             DebugText.Print(text, line);
             line.Y += 18;
         }
+    }
+
+    private void BuildOverlay(VoxelGIVolume target, Action<string> Print)
+    {
 
         // Under RequireControl the bare letter does nothing, so the overlay must not offer it: a
         // readout that names a key you have to guess a modifier for is worse than no readout.
