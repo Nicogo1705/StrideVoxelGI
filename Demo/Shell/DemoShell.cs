@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using Stride.Profiling;
 using StrideVoxelGI;
@@ -305,6 +306,21 @@ public sealed class DemoShell : SyncScript
             var name = DemoCatalog.Entries[running!.Value].Name.Replace(' ', '-').ToLowerInvariant();
             var path = AutoShot.SaveBackBuffer(HostGame, ScreenshotDirectory, $"{name}-{DateTime.Now:yyyyMMdd-HHmmss}.png");
             screenshotStatus = $"saved {path}";
+
+            // The camera's pose beside the image, as --pose takes it, so a view found by hand can
+            // be handed back to a capture run. The demo's own camera, not the menu's.
+            var camera = HostGame.SceneSystem.SceneInstance.RootScene.Entities
+                .Where(e => e.Name != MenuCameraName)
+                .Select(e => e.Get<CameraComponent>())
+                .FirstOrDefault(c => c is { Enabled: true });
+            if (camera is not null)
+            {
+                var p = camera.Entity.Transform.Position;
+                var q = camera.Entity.Transform.Rotation;
+                var pose = string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{p.X:0.###},{p.Y:0.###},{p.Z:0.###},{q.X:0.####},{q.Y:0.####},{q.Z:0.####},{q.W:0.####}");
+                File.WriteAllText(path + ".pose.txt", pose + Environment.NewLine);
+                screenshotStatus = $"saved {path}  pose {pose}";
+            }
         }
         catch (Exception exception)
         {
