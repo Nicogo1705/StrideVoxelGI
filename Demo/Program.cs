@@ -256,6 +256,16 @@ game.Script.AddTask(async () =>
     VoxelGridDemo.StartWithInjection = !args.Contains("--no-inject");
     VoxelGridDemo.StartInjectBounce = ParseFloat(Option("--inject-bounce"), -1f);
     VoxelGridDemo.StartConeOffset = ParseFloat(Option("--cone-offset"), VoxelGridDemo.StartConeOffset);
+    // --pose=x,y,z,qx,qy,qz,qw as Ctrl+S writes it beside a screenshot.
+    if (Option("--pose") is { } poseText)
+    {
+        var parts = poseText.Split(',');
+        if (parts.Length == 7 && parts.All(t => float.TryParse(t, NumberStyles.Float, CultureInfo.InvariantCulture, out _)))
+        {
+            var v = parts.Select(t => float.Parse(t, CultureInfo.InvariantCulture)).ToArray();
+            VoxelGridDemo.StartPose = (new Vector3(v[0], v[1], v[2]), new Quaternion(v[3], v[4], v[5], v[6]));
+        }
+    }
     VoxelGridDemo.StartLodBias = args.Contains("--no-lod") ? float.NaN : ParseFloat(Option("--lod-bias"), VoxelGridDemo.StartLodBias);
     VoxelGridDemo.StartSkyIntensity = ParseFloat(Option("--sky"), VoxelGridDemo.StartSkyIntensity);
     VoxelGridDemo.StartWithGI = args.Contains("--gi") || args.Contains("--gi-only");

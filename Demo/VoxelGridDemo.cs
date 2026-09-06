@@ -71,6 +71,9 @@ public static class VoxelGridDemo
     /// <summary>Level-of-detail bias of the drawn field, in levels; NaN turns the level of detail off.</summary>
     public static float StartLodBias { get; set; } = 0f;
 
+    /// <summary>Where the camera starts, from --pose (position, then rotation quaternion); null takes the default view.</summary>
+    public static (Vector3 Position, Quaternion Rotation)? StartPose { get; set; }
+
     /// <summary>
     /// A field worth looking at: rolling ground, a big sphere half sunk into it, and an arch, each
     /// with its own material id so the packed source has something to colour, and a white lamp
@@ -742,8 +745,8 @@ public static class VoxelGridDemo
             view.FarClipPlane = 400f;
         }
 
-        camera.Transform.Position = new Vector3(Extent * 0.5f, Extent * 0.75f, -Extent * 0.35f);
-        camera.Transform.Rotation = Quaternion.RotationYawPitchRoll(MathUtil.Pi, -0.45f, 0);
+        camera.Transform.Position = StartPose?.Position ?? new Vector3(Extent * 0.5f, Extent * 0.75f, -Extent * 0.35f);
+        camera.Transform.Rotation = StartPose?.Rotation ?? Quaternion.RotationYawPitchRoll(MathUtil.Pi, -0.45f, 0);
         camera.Add(new BasicCameraController());
         camera.Add(new VoxelDigger { AutoDigAfterFrames = AutoDigAfterFrames });
 

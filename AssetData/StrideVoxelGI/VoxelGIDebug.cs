@@ -561,6 +561,17 @@ public class VoxelGIDebug : SyncScript
 
             var path = Path.Combine(directory, fileName ?? $"voxelgi-{DateTime.Now:yyyyMMdd-HHmmss-fff}.png");
 
+            // The camera's pose beside the image, as text, so a view someone found by hand can be
+            // handed back to a capture run (--pose=...) and looked at again.
+            if (FollowCandidate is { } followed)
+            {
+                var p = followed.Position;
+                var q = followed.Rotation;
+                var pose = string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{p.X:0.###},{p.Y:0.###},{p.Z:0.###},{q.X:0.####},{q.Y:0.####},{q.Z:0.####},{q.W:0.####}");
+                File.WriteAllText(path + ".pose.txt", pose + Environment.NewLine);
+                Log.Info($"camera pose: {pose}");
+            }
+
             using var image = GraphicsDevice.Presenter.BackBuffer.GetDataAsImage(Game.GraphicsContext.CommandList);
 
             // The back buffer's alpha is whatever the last pass happened to leave there, usually
