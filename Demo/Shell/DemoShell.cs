@@ -309,7 +309,8 @@ public sealed class DemoShell : SyncScript
 
             // The camera's pose beside the image, as --pose takes it, so a view found by hand can
             // be handed back to a capture run. The demo's own camera, not the menu's.
-            var camera = HostGame.SceneSystem.SceneInstance.RootScene.Entities
+            // Every entity of every scene: a demo's camera lives in the demo's own scene.
+            var camera = HostGame.SceneSystem.SceneInstance
                 .Where(e => e.Name != MenuCameraName)
                 .Select(e => e.Get<CameraComponent>())
                 .FirstOrDefault(c => c is { Enabled: true });
