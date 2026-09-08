@@ -507,6 +507,20 @@ public static class VoxelGridDemo
             return Material.New(device, descriptor);
         }
 
+        // Water: animated wave normals and a colour that follows the swell, from the two shaders in Effects/.
+        static Material Water(GraphicsDevice device) => Material.New(device, new MaterialDescriptor
+        {
+            Attributes =
+            {
+                Diffuse = new MaterialDiffuseMapFeature(new ComputeShaderClassColor { MixinReference = "WaterWaveColor" }),
+                DiffuseModel = new MaterialDiffuseLambertModelFeature(),
+                Surface = new MaterialNormalMapFeature(new ComputeShaderClassColor { MixinReference = "WaterWaveNormal" }) { ScaleAndBias = true, IsXYNormal = false },
+                MicroSurface = new MaterialGlossinessMapFeature(new ComputeFloat(0.93f)),
+                Specular = new MaterialMetalnessMapFeature(new ComputeFloat(0.25f)),
+                SpecularModel = new MaterialSpecularMicrofacetModelFeature { Environment = new MaterialSpecularMicrofacetEnvironmentGGXPolynomial() },
+            },
+        });
+
         return
         [
             Make(device, new Color4(0f, 0f, 0f, 1f), 0f, 0f),                                              // 0: air, never at a surface
@@ -522,7 +536,7 @@ public static class VoxelGridDemo
             Make(device, new Color4(0.36f, 0.42f, 0.14f, 1f), 0.15f, 0f),                                 // 10: grass, dry
             Make(device, new Color4(0.50f, 0.48f, 0.45f, 1f), 0.25f, 0f),                                 // 11: rock, pale
             Make(device, new Color4(0.24f, 0.24f, 0.25f, 1f), 0.30f, 0f),                                 // 12: rock, dark
-            Make(device, new Color4(0.05f, 0.22f, 0.32f, 1f), 0.92f, 0.15f),                              // 13: water, glossy
+            Water(device),                                                                                 // 13: water
         ];
     }
 

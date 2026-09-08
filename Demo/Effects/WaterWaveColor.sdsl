@@ -1,0 +1,21 @@
+// Copyright (c) .NET Foundation and Contributors (https://dotnetfoundation.org/ & https://stride3d.net)
+// Distributed under the MIT license. See the LICENSE.md file in the project root for more information.
+namespace Demo
+{
+    /// Deep water in the troughs, lighter water on the swell, foam on the crests.
+    shader WaterWaveColor : ComputeColor, WaterWaves
+    {
+        override float4 Compute()
+        {
+            float2 gradient;
+            float3 w = Waves(gradient);
+            float swell = saturate(w.x * 2.5 + 0.5);
+            float3 deep = float3(0.01, 0.07, 0.16);
+            float3 shallow = float3(0.03, 0.24, 0.33);
+            float3 colour = lerp(deep, shallow, swell);
+            float foam = saturate((w.x - 0.20) * 12.0) * saturate((w.y - 0.55) * 4.0);
+            colour = lerp(colour, float3(0.7, 0.8, 0.82), foam * 0.6);
+            return float4(colour, 1);
+        }
+    };
+}

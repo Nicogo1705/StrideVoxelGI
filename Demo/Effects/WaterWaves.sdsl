@@ -1,0 +1,51 @@
+// Copyright (c) .NET Foundation and Contributors (https://dotnetfoundation.org/ & https://stride3d.net)
+// Distributed under the MIT license. See the LICENSE.md file in the project root for more information.
+namespace Demo
+{
+    /// Animated sum of directional waves over the world XZ plane, shared by the water's normal and colour.
+    shader WaterWaves : PositionStream4, Global
+    {
+        static float Hash(float2 p)
+        {
+            return frac(sin(dot(p, float2(127.1, 311.7))) * 43758.5453);
+        }
+
+        /// Smooth value noise in [0, 1].
+        static float Noise(float2 p)
+        {
+            float2 i = floor(p);
+            float2 f = frac(p);
+            f = f * f * (3.0 - 2.0 * f);
+            float a = Hash(i);
+            float b = Hash(i + float2(1, 0));
+            float c = Hash(i + float2(0, 1));
+            float d = Hash(i + float2(1, 1));
+            return lerp(lerp(a, b, f.x), lerp(c, d, f.x), f.y);
+        }
+
+        /// Wave height at this pixel in x, a crest mask in y; the slope over XZ in gradient.
+        float3 Waves(out float2 gradient)
+        {
+            float2 p = streams.PositionWS.xz;
+            float t = Time;
+            // The phase is warped by a slow noise so the directional waves never line up into a lattice.
+            float warp = Noise(p * 0.07 + t * 0.03) * 6.283;
+            float2 dirs[6] = { float2(0.94, 0.34), float2(-0.51, 0.86), float2(0.37, -0.93), float2(-0.98, -0.21), float2(0.71, 0.70), float2(-0.13, -0.99) };
+            float freqs[6] = { 0.31, 0.53, 0.87, 1.41, 2.3, 3.7 };
+            float amps[6] = { 0.16, 0.10, 0.06, 0.035, 0.02, 0.012 };
+            float speeds[6] = { 0.7, 0.9, 1.3, 1.7, 2.4, 3.2 };
+            float height = 0;
+            gradient = float2(0, 0);
+            [unroll]
+            for (int i = 0; i < 6; i++)
+            {
+                float2 d = dirs[i];
+                float phase = dot(d, p) * freqs[i] + t * speeds[i] + warp * amps[i] * 4.0;
+                height += sin(phase) * amps[i];
+                gradient += d * cos(phase) * amps[i] * freqs[i];
+            }
+            float crest = Noise(p * 0.9 + float2(t * 0.4, -t * 0.3));
+            return float3(height, crest, 0);
+        }
+    };
+}

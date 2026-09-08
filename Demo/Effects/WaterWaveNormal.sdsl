@@ -1,0 +1,16 @@
+// Copyright (c) .NET Foundation and Contributors (https://dotnetfoundation.org/ & https://stride3d.net)
+// Distributed under the MIT license. See the LICENSE.md file in the project root for more information.
+namespace Demo
+{
+    /// The wave slope as a tangent-space normal map value.
+    shader WaterWaveNormal : ComputeColor, WaterWaves
+    {
+        override float4 Compute()
+        {
+            float2 gradient;
+            Waves(gradient);
+            float3 n = normalize(float3(-gradient.x * 0.6, -gradient.y * 0.6, 1.0));
+            return float4(n * 0.5 + 0.5, 1);
+        }
+    };
+}
