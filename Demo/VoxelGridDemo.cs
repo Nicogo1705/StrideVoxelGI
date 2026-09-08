@@ -150,6 +150,9 @@ public static class VoxelGridDemo
     /// <summary>Natural terrain instead of the test props: fractal hills, grass on the flats, rock on the slopes, sand in the hollows, dirt underneath.</summary>
     public static bool Earth { get; set; }
 
+    /// <summary>Water level the earth terrain was generated with, in world units; NaN when there is none.</summary>
+    public static float GeneratedWaterLevel { get; private set; } = float.NaN;
+
     private static ushort[] GenerateEarth()
     {
         var samples = new ushort[Samples * Samples * Samples];
@@ -173,6 +176,7 @@ public static class VoxelGridDemo
             }
 
         var waterLevel = baseHeight - amplitude * 0.05f;
+        GeneratedWaterLevel = waterLevel;
         var sandLevel = waterLevel + amplitude * 0.06f;
         var tintFrequency = 5f / Extent;
         var overhangFrequency = 6f / Extent;
@@ -595,6 +599,9 @@ public static class VoxelGridDemo
 
                     var index = (x * Samples + y) * Samples + z;
                     var previous = cachedSamples[index];
+                    // Water is not dug or filled: the flow rewrites it from the ground it finds.
+                    if ((previous >> 8) == WaterMaterial)
+                        continue;
                     var density = previous & 0xFF;
                     var material = previous & 0xFF00;
 
@@ -631,6 +638,7 @@ public static class VoxelGridDemo
         if (!touched)
             return;
 
+        GroundChanged(x0, z0, x1, z1);
         UploadTexture(game.GraphicsContext.CommandList, new Int3(x0, y0, z0), new Int3(x1, y1, z1));
 
         // The pyramid over the box the brush touched, and nothing outside it.
@@ -858,161 +866,208 @@ public static class VoxelGridDemo
 
 
     // -- flowing water --------------------------------------------------------------------------
-    // A cellular fluid over the field: each water cell holds an amount, falls into the cell below when it can,
-    // otherwise levels out with its four neighbours. Only cells that may still move are visited.
+    // Water is a depth per column over the terrain's top surface. Neighbouring columns exchange water by the
+    // difference of their surface levels, so a sheet is flat and a slope drains; the voxels are rewritten from
+    // the depth, the top cell carrying the fraction so the surface interpolates to its true height.
 
     private const int WaterMaterial = 13;
-    private static byte[]? waterAmount;
+    /// <summary>The field without any water, restored wherever water leaves.</summary>
+    private static ushort[]? baseSamples;
+    /// <summary>Water depth per column, in cells.</summary>
+    private static float[]? waterDepth;
+    /// <summary>Highest solid sample of each column, in cells; -1 for a column with none.</summary>
+    private static int[]? groundTop;
+    /// <summary>Where the ground's iso surface sits in each column, in cells, read off the two samples around it.</summary>
+    private static float[]? groundHeight;
     private static HashSet<int> waterActive = [];
     private static HashSet<int> waterNext = [];
     private static float waterClock;
 
-    /// <summary>Seconds between two flow steps; one step moves water one cell.</summary>
-    public static float WaterStepSeconds { get; set; } = 0.06f;
+    /// <summary>Seconds between two flow steps.</summary>
+    public static float WaterStepSeconds { get; set; } = 0.025f;
 
-    /// <summary>How many cells are still moving.</summary>
+    /// <summary>How fast a level difference moves water, per step.</summary>
+    public static float WaterFlowRate { get; set; } = 0.35f;
+
+    /// <summary>How many columns are still moving.</summary>
     public static int WaterActiveCells => waterActive.Count;
 
+    private static int Column(int x, int z) => x * Samples + z;
     private static int Index(int x, int y, int z) => (x * Samples + y) * Samples + z;
 
-    /// <summary>Water density as the field stores it: always over the iso level, higher when fuller.</summary>
-    private static ushort PackWater(int amount) => amount <= 0 ? (ushort)0 : (ushort)((128 + amount / 2) | (WaterMaterial << 8));
-
-    /// <summary>Reads the generated lakes into the amount grid and wakes their surface.</summary>
+    /// <summary>Reads the generated lakes as column depths and remembers the dry field.</summary>
     private static void SeedWater()
     {
         if (cachedSamples is null)
             return;
-        waterAmount = new byte[cachedSamples.Length];
+        var n = Samples;
+        baseSamples = (ushort[])cachedSamples.Clone();
+        waterDepth = new float[n * n];
+        groundTop = new int[n * n];
+        groundHeight = new float[n * n];
         waterActive.Clear();
-        for (int x = 0; x < Samples; ++x)
-            for (int y = 0; y < Samples; ++y)
-                for (int z = 0; z < Samples; ++z)
+        var level = float.IsNaN(GeneratedWaterLevel) ? -1f : GeneratedWaterLevel / CellSize;
+        for (int x = 0; x < n; ++x)
+            for (int z = 0; z < n; ++z)
+            {
+                var column = Column(x, z);
+                var hasWater = false;
+                for (int y = 0; y < n; ++y)
                 {
                     var index = Index(x, y, z);
-                    var packed = cachedSamples[index];
-                    if ((packed >> 8) != WaterMaterial)
-                        continue;
-                    var full = (packed & 0xFF) >= 128;
-                    waterAmount[index] = full ? (byte)255 : (byte)0;
-                    cachedSamples[index] = PackWater(waterAmount[index]);
-                    if (full)
-                        waterActive.Add(index);
+                    if ((cachedSamples[index] >> 8) == WaterMaterial)
+                    {
+                        baseSamples[index] = 0;
+                        hasWater = true;
+                    }
                 }
+                ReadGround(x, z);
+                // The generator filled every hollow up to one level: the depth is what that level leaves above the ground.
+                waterDepth[column] = hasWater && groundTop[column] >= 0 ? MathF.Max(0f, level - groundHeight[column]) : 0f;
+                if (waterDepth[column] > 0f)
+                    waterActive.Add(column);
+            }
+        for (int x = 0; x < n; ++x)
+            for (int z = 0; z < n; ++z)
+                WriteColumn(x, z, n - 1);
     }
 
-    /// <summary>A cell water may enter: air, terrain below the iso level, or water with room left.</summary>
-    private static bool IsOpen(int index)
+    /// <summary>Reads a column's ground from the dry field: its top solid sample, and the iso height between it and the sample above.</summary>
+    private static void ReadGround(int x, int z)
     {
-        var packed = cachedSamples![index];
-        var material = packed >> 8;
-        return material == WaterMaterial ? waterAmount![index] < 255 : material == 0 || (packed & 0xFF) < 128;
-    }
-
-    private static void Wake(int x, int y, int z)
-    {
-        if (x < 0 || y < 0 || z < 0 || x >= Samples || y >= Samples || z >= Samples)
+        var column = Column(x, z);
+        var top = -1;
+        for (int y = Samples - 1; y >= 0; --y)
+        {
+            if ((baseSamples![Index(x, y, z)] & 0xFF) >= 128)
+            {
+                top = y;
+                break;
+            }
+        }
+        groundTop![column] = top;
+        if (top < 0)
+        {
+            groundHeight![column] = 0f;
             return;
-        var index = Index(x, y, z);
-        if (waterAmount![index] > 0)
-            waterNext.Add(index);
+        }
+        var below = baseSamples![Index(x, top, z)] & 0xFF;
+        var above = top + 1 < Samples ? baseSamples[Index(x, top + 1, z)] & 0xFF : 0;
+        groundHeight![column] = top + (below - 128f) / MathF.Max(below - above, 1f);
     }
 
-    /// <summary>Moves some water from one cell into another and records both.</summary>
-    private static void Move(int from, int to, int amount, ref Int3 lo, ref Int3 hi)
+    /// <summary>Surface level of a column, in cells: the ground, plus the water standing on it.</summary>
+    private static float WaterSurface(int column) => groundHeight![column] + waterDepth![column];
+
+    /// <summary>Rewrites the cells of a column from its water level, up to <paramref name="upTo"/>; returns the highest changed.</summary>
+    private static int WriteColumn(int x, int z, int upTo)
     {
-        waterAmount![from] = (byte)(waterAmount[from] - amount);
-        waterAmount[to] = (byte)(waterAmount[to] + amount);
-        cachedSamples![from] = PackWater(waterAmount[from]);
-        cachedSamples[to] = PackWater(waterAmount[to]);
-        Touch(from, ref lo, ref hi);
-        Touch(to, ref lo, ref hi);
+        var column = Column(x, z);
+        var bottom = Math.Max(groundTop![column], 0);
+        var depth = waterDepth![column];
+        var level = groundHeight![column] + depth;
+        var top = -1;
+        var untouched = 0;
+        for (int y = bottom; y <= upTo && y < Samples; ++y)
+        {
+            var index = Index(x, y, z);
+            var basePacked = baseSamples![index];
+            var packed = basePacked;
+            if (depth > 0f)
+            {
+                // The iso surface lands on the water level; never below what the terrain already holds there.
+                var water = (int)MathF.Round(MathUtil.Clamp(128f + (level - y) * 128f, 0f, 255f));
+                if (water > (basePacked & 0xFF) && water >= 8)
+                    packed = (ushort)(water | (WaterMaterial << 8));
+            }
+            if (cachedSamples![index] == packed)
+            {
+                if (++untouched > 2 && y > level + 1)
+                    break;
+                continue;
+            }
+            untouched = 0;
+            cachedSamples[index] = packed;
+            if (gpuTexels != null)
+                WriteTexel(gpuTexels, (z * Samples + y) * Samples + x, packed);
+            top = y;
+        }
+        return top;
     }
 
-    private static void Touch(int index, ref Int3 lo, ref Int3 hi)
+    private static void Wake(int x, int z)
     {
-        var z = index % Samples;
-        var y = index / Samples % Samples;
-        var x = index / (Samples * Samples);
-        lo = Int3.Min(lo, new Int3(x, y, z));
-        hi = Int3.Max(hi, new Int3(x, y, z));
-        if (gpuTexels != null)
-            WriteTexel(gpuTexels, (z * Samples + y) * Samples + x, cachedSamples![index]);
-        waterNext.Add(index);
-        Wake(x - 1, y, z); Wake(x + 1, y, z); Wake(x, y - 1, z); Wake(x, y + 1, z); Wake(x, y, z - 1); Wake(x, y, z + 1);
+        if (x >= 0 && z >= 0 && x < Samples && z < Samples)
+            waterNext.Add(Column(x, z));
     }
 
-    /// <summary>One flow step over the active cells, then the GPU copy of the touched box.</summary>
+    /// <summary>One flow step over the active columns, then the GPU copy of the touched box.</summary>
     public static void UpdateWater(IGame game)
     {
-        if (cachedSamples is null || waterAmount is null || waterActive.Count == 0)
+        if (cachedSamples is null || waterDepth is null || groundTop is null || waterActive.Count == 0)
             return;
         waterClock += (float)game.UpdateTime.Elapsed.TotalSeconds;
         if (waterClock < WaterStepSeconds)
             return;
         waterClock = 0f;
 
+        var n = Samples;
+        waterNext.Clear();
         var lo = new Int3(int.MaxValue);
         var hi = new Int3(int.MinValue);
-        waterNext.Clear();
-        var n = Samples;
         Span<int> sides = stackalloc int[4];
-        foreach (var index in waterActive)
+        foreach (var column in waterActive)
         {
-            var amount = (int)waterAmount[index];
-            if (amount == 0)
+            var depth = waterDepth[column];
+            if (depth <= 0f)
                 continue;
-            var z = index % n;
-            var y = index / n % n;
-            var x = index / (n * n);
-
-            // Down first: everything that fits.
-            if (y > 0)
-            {
-                var below = Index(x, y - 1, z);
-                if (IsOpen(below))
-                {
-                    var belowIsWater = (cachedSamples[below] >> 8) == WaterMaterial;
-                    if (!belowIsWater)
-                        waterAmount[below] = 0;
-                    var room = belowIsWater ? 255 - waterAmount[below] : 255;
-                    Move(index, below, Math.Min(amount, room), ref lo, ref hi);
-                    amount = waterAmount[index];
-                    if (amount == 0)
-                        continue;
-                }
-            }
-
-            // Then sideways: half the difference to each lower neighbour, so a column spreads into a sheet.
+            var x = column / n;
+            var z = column % n;
             var count = 0;
-            if (x > 0) sides[count++] = Index(x - 1, y, z);
-            if (x < n - 1) sides[count++] = Index(x + 1, y, z);
-            if (z > 0) sides[count++] = Index(x, y, z - 1);
-            if (z < n - 1) sides[count++] = Index(x, y, z + 1);
-            for (int i = 0; i < count && amount > 8; ++i)
+            if (x > 0) sides[count++] = column - n;
+            if (x < n - 1) sides[count++] = column + n;
+            if (z > 0) sides[count++] = column - 1;
+            if (z < n - 1) sides[count++] = column + 1;
+
+            var surface = WaterSurface(column);
+            var moved = false;
+            for (int i = 0; i < count && depth > 0f; ++i)
             {
                 var side = sides[i];
-                if (!IsOpen(side))
+                if (groundTop[side] < 0)
                     continue;
-                var sideIsWater = (cachedSamples[side] >> 8) == WaterMaterial;
-                if (!sideIsWater)
-                    waterAmount[side] = 0;
-                var flow = (amount - waterAmount[side]) / 2;
-                if (flow < 4)
+                var drop = surface - WaterSurface(side);
+                if (drop < 0.01f)
                     continue;
-                Move(index, side, flow, ref lo, ref hi);
-                amount = waterAmount[index];
+                // Never more than a quarter of the column per neighbour, and never past the shared level.
+                var flow = MathF.Min(MathF.Min(drop * WaterFlowRate, depth * 0.25f), drop * 0.5f);
+                waterDepth[column] -= flow;
+                waterDepth[side] += flow;
+                depth -= flow;
+                surface -= flow;
+                moved = true;
+                Wake(side / n, side % n);
             }
-
-            // A film too thin to see dries up rather than creeping forever.
-            if (amount > 0 && amount < 12 && y > 0 && !IsOpen(Index(x, y - 1, z)))
+            // A film too thin to see soaks away.
+            if (waterDepth[column] < 0.02f)
             {
-                waterAmount[index] = 0;
-                cachedSamples[index] = 0;
-                Touch(index, ref lo, ref hi);
+                waterDepth[column] = 0f;
+                moved = true;
             }
+            if (moved)
+                Wake(x, z);
         }
 
+        foreach (var column in waterNext)
+        {
+            var x = column / n;
+            var z = column % n;
+            var top = WriteColumn(x, z, n - 1);
+            if (top < 0)
+                continue;
+            lo = Int3.Min(lo, new Int3(x, Math.Max(groundTop[column], 0), z));
+            hi = Int3.Max(hi, new Int3(x, top, z));
+        }
         (waterActive, waterNext) = (waterNext, waterActive);
         if (lo.X > hi.X)
             return;
@@ -1020,37 +1075,70 @@ public static class VoxelGridDemo
         occupancy?.Update(game.GraphicsContext.CommandList, ReadDensity, lo, hi);
     }
 
-    /// <summary>Adds water in a ball around a point, where there is room for it.</summary>
+    /// <summary>Adds water on the columns around a point.</summary>
     public static void Pour(IGame game, Vector3 centre, float radius)
     {
-        if (cachedSamples is null || waterAmount is null)
+        if (waterDepth is null || groundTop is null)
             return;
-        var lo = new Int3(int.MaxValue);
-        var hi = new Int3(int.MinValue);
         var inverse = 1f / CellSize;
-        var c = centre * inverse;
+        var cx = (int)MathF.Round(centre.X * inverse);
+        var cz = (int)MathF.Round(centre.Z * inverse);
         var r = Math.Max(1, (int)MathF.Ceiling(radius * inverse));
         waterNext.Clear();
-        for (int x = Math.Max(0, (int)c.X - r); x <= Math.Min(Samples - 1, (int)c.X + r); ++x)
-            for (int y = Math.Max(0, (int)c.Y - r); y <= Math.Min(Samples - 1, (int)c.Y + r); ++y)
-                for (int z = Math.Max(0, (int)c.Z - r); z <= Math.Min(Samples - 1, (int)c.Z + r); ++z)
-                {
-                    if ((new Vector3(x, y, z) - c).Length() > r)
-                        continue;
-                    var index = Index(x, y, z);
-                    if (!IsOpen(index))
-                        continue;
-                    waterAmount[index] = 255;
-                    cachedSamples[index] = PackWater(255);
-                    Touch(index, ref lo, ref hi);
-                }
-        foreach (var index in waterNext)
-            waterActive.Add(index);
+        for (int x = Math.Max(0, cx - r); x <= Math.Min(Samples - 1, cx + r); ++x)
+            for (int z = Math.Max(0, cz - r); z <= Math.Min(Samples - 1, cz + r); ++z)
+            {
+                if ((x - cx) * (x - cx) + (z - cz) * (z - cz) > r * r)
+                    continue;
+                var column = Column(x, z);
+                if (groundTop[column] < 0)
+                    continue;
+                waterDepth[column] += 1.5f;
+                waterNext.Add(column);
+            }
+        var lo = new Int3(int.MaxValue);
+        var hi = new Int3(int.MinValue);
+        foreach (var column in waterNext)
+        {
+            var x = column / Samples;
+            var z = column % Samples;
+            var top = WriteColumn(x, z, Samples - 1);
+            waterActive.Add(column);
+            if (top < 0)
+                continue;
+            lo = Int3.Min(lo, new Int3(x, Math.Max(groundTop[column], 0), z));
+            hi = Int3.Max(hi, new Int3(x, top, z));
+        }
         waterNext.Clear();
         if (lo.X > hi.X)
             return;
         UploadTexture(game.GraphicsContext.CommandList, lo, hi);
         occupancy?.Update(game.GraphicsContext.CommandList, ReadDensity, lo, hi);
+    }
+
+    /// <summary>After a dig or fill: the ground under these columns changed, so their tops are re-read and they wake.</summary>
+    private static void GroundChanged(int x0, int z0, int x1, int z1)
+    {
+        if (groundTop is null || baseSamples is null || cachedSamples is null)
+            return;
+        for (int x = x0; x <= x1; ++x)
+            for (int z = z0; z <= z1; ++z)
+            {
+                var column = Column(x, z);
+                for (int y = 0; y < Samples; ++y)
+                {
+                    var packed = cachedSamples[Index(x, y, z)];
+                    if ((packed >> 8) != WaterMaterial)
+                        baseSamples[Index(x, y, z)] = packed;
+                }
+                ReadGround(x, z);
+                if (waterDepth![column] > 0f)
+                    waterActive.Add(column);
+                Wake(x - 1, z); Wake(x + 1, z); Wake(x, z - 1); Wake(x, z + 1);
+            }
+        foreach (var column in waterNext)
+            waterActive.Add(column);
+        waterNext.Clear();
     }
 
     /// <summary>Scaffolding: carve a fixed trench after this many frames, for an unattended capture.</summary>
@@ -1059,7 +1147,7 @@ public static class VoxelGridDemo
     public static void Build(Game game, Entity camera)
     {
         cachedSamples ??= Generate();
-        if (waterAmount is null)
+        if (waterDepth is null)
             SeedWater();
         BuildScene(game, game.SceneSystem.SceneInstance.RootScene, camera, cachedSamples);
     }
