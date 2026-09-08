@@ -172,7 +172,9 @@ public static class VoxelGridDemo
                 height[x * Samples + z] = baseHeight + (h * 2f - 1f) * amplitude + ridge * ridge * amplitude * 0.5f;
             }
 
-        var sandLevel = baseHeight - amplitude * 0.45f;
+        var waterLevel = baseHeight - amplitude * 0.05f;
+        var sandLevel = waterLevel + amplitude * 0.06f;
+        var tintFrequency = 5f / Extent;
         var overhangFrequency = 6f / Extent;
         var overhangAmplitude = Extent * 0.09f;
         var caveFrequency = 3.5f / Extent;
@@ -192,7 +194,11 @@ public static class VoxelGridDemo
                 var slope = MathF.Sqrt(dx * dx + dz * dz);
 
                 // Surface material of this column: sand low down, rock where it is steep, grass elsewhere.
-                var surface = h < sandLevel ? 8 : slope > 0.9f ? 7 : 5;
+                // Tint variation: patches of dry grass and of darker rock, from a second noise per column.
+                var tint = Fbm(x * CellSize * tintFrequency + 300f, z * CellSize * tintFrequency + 700f, 3);
+                var grass = tint > 0.58f ? 10 : tint < 0.42f ? 9 : 5;
+                var rock = tint > 0.55f ? 12 : tint < 0.45f ? 11 : 7;
+                var surface = h < sandLevel ? 8 : slope > 0.9f ? rock : grass;
 
                 var px2 = x * CellSize;
                 var pz2 = z * CellSize;
@@ -208,6 +214,8 @@ public static class VoxelGridDemo
                     var caveRoom = Saturate((py - caveMargin) / caveMargin);
                     var cave = Saturate((caveNoise - caveThreshold) * 14f / softness) * caveRoom;
                     ground *= 1f - cave;
+                    // Still water fills every hollow below its level; it is its own material.
+                    var water = Saturate((waterLevel - py) * 0.9f / softness) * (1f - ground);
 
                     // Corner lamp pillars, kept so the field is lit from somewhere at night.
                     var px = x * CellSize;
@@ -219,14 +227,15 @@ public static class VoxelGridDemo
                     var pillarVertical = MathF.Min(py, Extent * 0.55f - py);
                     var pillar = Saturate(MathF.Min(pillarRadial, pillarVertical) * 1.2f / softness);
 
-                    var density = MathF.Max(ground, pillar);
+                    var density = MathF.Max(MathF.Max(ground, pillar), water);
                     // Dirt below the top layer; the layer is thicker under grass than under rock.
                     var depth = h + lean - py;
                     // The density ramp spans about softness cells, so the layer must be deeper than that for the surface cells to carry it.
                     var topLayer = (surface == 7 ? softness + 1f : 2f * softness + 3f) * CellSize;
                     var material = density <= 0f ? 0
                                  : pillar > ground + 0.05f ? 4
-                                 : cave > 0.02f || lean < -overhangAmplitude * 0.5f ? 7
+                                 : water > ground ? 13
+                                 : cave > 0.02f || lean < -overhangAmplitude * 0.5f ? rock
                                  : depth > topLayer ? 6
                                  : surface;
 
@@ -509,6 +518,11 @@ public static class VoxelGridDemo
             Make(device, new Color4(0.28f, 0.18f, 0.11f, 1f), 0.10f, 0f),                                 // 6: dirt
             Make(device, new Color4(0.38f, 0.37f, 0.36f, 1f), 0.25f, 0f),                                 // 7: rock
             Make(device, new Color4(0.76f, 0.68f, 0.48f, 1f), 0.20f, 0f),                                 // 8: sand
+            Make(device, new Color4(0.10f, 0.27f, 0.08f, 1f), 0.15f, 0f),                                 // 9: grass, deep
+            Make(device, new Color4(0.36f, 0.42f, 0.14f, 1f), 0.15f, 0f),                                 // 10: grass, dry
+            Make(device, new Color4(0.50f, 0.48f, 0.45f, 1f), 0.25f, 0f),                                 // 11: rock, pale
+            Make(device, new Color4(0.24f, 0.24f, 0.25f, 1f), 0.30f, 0f),                                 // 12: rock, dark
+            Make(device, new Color4(0.05f, 0.22f, 0.32f, 1f), 0.92f, 0.15f),                              // 13: water, glossy
         ];
     }
 
@@ -939,7 +953,7 @@ public static class VoxelGridDemo
         {
             new LightComponent
             {
-                Type = new LightAmbient { Color = new ColorRgbProvider(new Color3(0.30f, 0.34f, 0.42f)) },
+                Type = new LightAmbient { Color = new ColorRgbProvider(Earth ? new Color3(0.50f, 0.60f, 0.78f) : new Color3(0.30f, 0.34f, 0.42f)) },
                 Intensity = 1f,
             },
         };
@@ -975,6 +989,15 @@ public static class VoxelGridDemo
         camera.Transform.Position = StartPose?.Position ?? new Vector3(Extent * 0.5f, Extent * 0.75f, -Extent * 0.35f);
         camera.Transform.Rotation = StartPose?.Rotation ?? Quaternion.RotationYawPitchRoll(MathUtil.Pi, -0.45f, 0);
         camera.Add(new BasicCameraController());
+
+        // A daylight sky behind the natural terrain: the frame's clear colour, and what the GI cones see past the field.
+        if (Earth && PostEffectsToggle.FindForwardRenderer(game.SceneSystem.GraphicsCompositor?.Game) is { } forward)
+        {
+            var sky = new Color3(0.47f, 0.66f, 0.92f);
+            forward.Clear.Color = new Color4(sky.R, sky.G, sky.B, 1f);
+            StartSky = sky;
+            StartSkyIntensity = MathF.Max(StartSkyIntensity, 1.0f);
+        }
         camera.Add(new VoxelDigger { AutoDigAfterFrames = AutoDigAfterFrames });
 
         // The aim: a dot at the centre of the screen, in place of a beam drawn into the scene. A

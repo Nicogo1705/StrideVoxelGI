@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Stride.Engine;
 using Stride.Input;
 using Stride.Rendering.Compositing;
@@ -68,6 +69,15 @@ public class PostEffectsToggle : SyncScript
     /// drawing the scene - here the forward renderer's own PostEffects is null and a separate
     /// renderer holds them - so the graph is searched rather than assumed.
     /// </summary>
+    /// <summary>The camera's forward renderer, whose clear colour is the sky.</summary>
+    public static ForwardRenderer? FindForwardRenderer(ISceneRenderer? renderer) => renderer switch
+    {
+        SceneRendererCollection collection => collection.Children.Select(FindForwardRenderer).FirstOrDefault(f => f != null),
+        SceneCameraRenderer camera => FindForwardRenderer(camera.Child),
+        ForwardRenderer forward => forward,
+        _ => null,
+    };
+
     public static PostProcessingEffects? FindPostEffects(ISceneRenderer? renderer)
     {
         switch (renderer)
