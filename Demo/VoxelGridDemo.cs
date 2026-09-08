@@ -787,7 +787,8 @@ public static class VoxelGridDemo
         {
             view.VerticalFieldOfView = 65f;
             view.NearClipPlane = 0.1f;
-            view.FarClipPlane = 400f;
+            // The far shot poses stand several extents away from the field.
+            view.FarClipPlane = MathF.Max(400f, Extent * 10f);
         }
 
         camera.Transform.Position = StartPose?.Position ?? new Vector3(Extent * 0.5f, Extent * 0.75f, -Extent * 0.35f);

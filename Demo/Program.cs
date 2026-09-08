@@ -236,6 +236,12 @@ game.Script.AddTask(async () =>
         VoxelGridDemo.Samples = 257;
         VoxelGridDemo.CellSize = 0.625f;
     }
+    // Ten times the voxels and ten times the volume of --big, at the same cell size: 553 samples, 345 units a side.
+    if (args.Contains("--huge"))
+    {
+        VoxelGridDemo.Samples = 553;
+        VoxelGridDemo.CellSize = 0.625f;
+    }
     if (int.TryParse(Option("--samples"), out var samples) && samples > 1)
         VoxelGridDemo.Samples = samples;
     if (float.TryParse(Option("--cell"), NumberStyles.Float, CultureInfo.InvariantCulture, out var cell) && cell > 0)
