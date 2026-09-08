@@ -272,6 +272,7 @@ game.Script.AddTask(async () =>
             VoxelGridDemo.StartPose = (new Vector3(v[0], v[1], v[2]), new Quaternion(v[3], v[4], v[5], v[6]));
         }
     }
+    VoxelGridDemo.StartBeamBlockSize = ParseInt(Option("--beam"), VoxelGridDemo.StartBeamBlockSize);
     VoxelGridDemo.StartLodBias = args.Contains("--no-lod") ? float.NaN : ParseFloat(Option("--lod-bias"), VoxelGridDemo.StartLodBias);
     VoxelGridDemo.StartSkyIntensity = ParseFloat(Option("--sky"), VoxelGridDemo.StartSkyIntensity);
     VoxelGridDemo.StartWithGI = args.Contains("--gi") || args.Contains("--gi-only");

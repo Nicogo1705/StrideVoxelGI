@@ -70,6 +70,8 @@ public static class VoxelGridDemo
 
     /// <summary>Level-of-detail bias of the drawn field, in levels; NaN turns the level of detail off.</summary>
     public static float StartLodBias { get; set; } = 0f;
+    /// <summary>Beam pre-pass block size in pixels, 0 to disable it.</summary>
+    public static int StartBeamBlockSize { get; set; } = 8;
 
     /// <summary>Where the camera starts, from --pose (position, then rotation quaternion); null takes the default view.</summary>
     public static (Vector3 Position, Quaternion Rotation)? StartPose { get; set; }
@@ -715,6 +717,7 @@ public static class VoxelGridDemo
             InjectIntoGI = StartWithInjection,
             LevelOfDetail = !float.IsNaN(StartLodBias),
             LodBias = float.IsNaN(StartLodBias) ? 0f : StartLodBias,
+            BeamBlockSize = StartBeamBlockSize,
             DebugView = DebugView,
             Dither = StartDither,
         });
