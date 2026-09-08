@@ -173,6 +173,11 @@ public static class VoxelGridDemo
             }
 
         var sandLevel = baseHeight - amplitude * 0.45f;
+        var overhangFrequency = 6f / Extent;
+        var overhangAmplitude = Extent * 0.09f;
+        var caveFrequency = 3.5f / Extent;
+        var caveThreshold = 0.56f;
+        var caveMargin = MathF.Max(3f * CellSize * softness, Extent * 0.03f);
         for (int x = 0; x < Samples; ++x)
         {
             var x0 = Math.Max(x - 1, 0);
@@ -189,10 +194,20 @@ public static class VoxelGridDemo
                 // Surface material of this column: sand low down, rock where it is steep, grass elsewhere.
                 var surface = h < sandLevel ? 8 : slope > 0.9f ? 7 : 5;
 
+                var px2 = x * CellSize;
+                var pz2 = z * CellSize;
                 for (int y = 0; y < Samples; ++y)
                 {
                     var py = y * CellSize;
-                    var ground = Saturate((h - py) * 0.9f / softness);
+                    // 3D noise on the height makes the surface lean over itself: overhangs and ledges.
+                    var lean = (Fbm3(px2 * overhangFrequency, py * overhangFrequency, pz2 * overhangFrequency, 3) * 2f - 1f) * overhangAmplitude;
+                    var ground = Saturate((h + lean - py) * 0.9f / softness);
+                    // Caves: carved where a coarser 3D noise peaks, only well below the surface and above the floor.
+                    var caveNoise = Fbm3(px2 * caveFrequency + 101f, py * caveFrequency * 1.6f, pz2 * caveFrequency + 47f, 4);
+                    // Open to the sky where the noise reaches the surface, closed only near the floor.
+                    var caveRoom = Saturate((py - caveMargin) / caveMargin);
+                    var cave = Saturate((caveNoise - caveThreshold) * 14f / softness) * caveRoom;
+                    ground *= 1f - cave;
 
                     // Corner lamp pillars, kept so the field is lit from somewhere at night.
                     var px = x * CellSize;
@@ -206,11 +221,12 @@ public static class VoxelGridDemo
 
                     var density = MathF.Max(ground, pillar);
                     // Dirt below the top layer; the layer is thicker under grass than under rock.
-                    var depth = h - py;
+                    var depth = h + lean - py;
                     // The density ramp spans about softness cells, so the layer must be deeper than that for the surface cells to carry it.
                     var topLayer = (surface == 7 ? softness + 1f : 2f * softness + 3f) * CellSize;
                     var material = density <= 0f ? 0
                                  : pillar > ground + 0.05f ? 4
+                                 : cave > 0.02f || lean < -overhangAmplitude * 0.5f ? 7
                                  : depth > topLayer ? 6
                                  : surface;
 
@@ -235,6 +251,50 @@ public static class VoxelGridDemo
             y = y * 1.97f + 11.3f;
         }
         return sum / total;
+    }
+
+    /// <summary>Fractal 3D value noise in [0, 1].</summary>
+    private static float Fbm3(float x, float y, float z, int octaves)
+    {
+        float sum = 0f, weight = 0.5f, total = 0f;
+        for (int i = 0; i < octaves; ++i)
+        {
+            sum += ValueNoise3(x, y, z) * weight;
+            total += weight;
+            weight *= 0.5f;
+            x = x * 2.01f + 19.1f;
+            y = y * 1.99f + 7.3f;
+            z = z * 2.03f + 3.7f;
+        }
+        return sum / total;
+    }
+
+    private static float ValueNoise3(float x, float y, float z)
+    {
+        var xi = MathF.Floor(x);
+        var yi = MathF.Floor(y);
+        var zi = MathF.Floor(z);
+        var fx = x - xi;
+        var fy = y - yi;
+        var fz = z - zi;
+        fx = fx * fx * (3f - 2f * fx);
+        fy = fy * fy * (3f - 2f * fy);
+        fz = fz * fz * (3f - 2f * fz);
+        float Corner(float dx, float dy, float dz) => Hash3(xi + dx, yi + dy, zi + dz);
+        var x00 = Corner(0, 0, 0) + (Corner(1, 0, 0) - Corner(0, 0, 0)) * fx;
+        var x10 = Corner(0, 1, 0) + (Corner(1, 1, 0) - Corner(0, 1, 0)) * fx;
+        var x01 = Corner(0, 0, 1) + (Corner(1, 0, 1) - Corner(0, 0, 1)) * fx;
+        var x11 = Corner(0, 1, 1) + (Corner(1, 1, 1) - Corner(0, 1, 1)) * fx;
+        var y0 = x00 + (x10 - x00) * fy;
+        var y1 = x01 + (x11 - x01) * fy;
+        return y0 + (y1 - y0) * fz;
+    }
+
+    private static float Hash3(float x, float y, float z)
+    {
+        var h = unchecked((uint)(int)x * 374761393u + (uint)(int)y * 668265263u + (uint)(int)z * 2246822519u);
+        h = (h ^ (h >> 13)) * 1274126177u;
+        return (h ^ (h >> 16)) / 4294967295f;
     }
 
     private static float ValueNoise(float x, float y)
