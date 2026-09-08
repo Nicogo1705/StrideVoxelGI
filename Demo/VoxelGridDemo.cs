@@ -83,6 +83,8 @@ public static class VoxelGridDemo
     /// </summary>
     public static ushort[] Generate()
     {
+        if (Earth)
+            return GenerateEarth();
         var samples = new ushort[Samples * Samples * Samples];
         var centre = SphereCentre;
         // The props scale with the field, and the density ramps widen with the cell so a surface
@@ -143,6 +145,118 @@ public static class VoxelGridDemo
             }
         }
         return samples;
+    }
+
+    /// <summary>Natural terrain instead of the test props: fractal hills, grass on the flats, rock on the slopes, sand in the hollows, dirt underneath.</summary>
+    public static bool Earth { get; set; }
+
+    private static ushort[] GenerateEarth()
+    {
+        var samples = new ushort[Samples * Samples * Samples];
+        var softness = MathF.Max(CellSize / 0.125f, 1f);
+        var k = FeatureScale;
+
+        // One height per column; the slope comes from the neighbouring columns.
+        var height = new float[Samples * Samples];
+        var baseHeight = Extent * 0.30f;
+        var amplitude = Extent * 0.22f;
+        var frequency = 0.9f / Extent;
+        for (int x = 0; x < Samples; ++x)
+            for (int z = 0; z < Samples; ++z)
+            {
+                var px = x * CellSize;
+                var pz = z * CellSize;
+                var h = Fbm(px * frequency, pz * frequency, 6);
+                // Ridged detail on top so the slopes read as rock rather than dunes.
+                var ridge = 1f - MathF.Abs(Fbm(px * frequency * 3f + 17f, pz * frequency * 3f + 5f, 3) * 2f - 1f);
+                height[x * Samples + z] = baseHeight + (h * 2f - 1f) * amplitude + ridge * ridge * amplitude * 0.5f;
+            }
+
+        var sandLevel = baseHeight - amplitude * 0.45f;
+        for (int x = 0; x < Samples; ++x)
+        {
+            var x0 = Math.Max(x - 1, 0);
+            var x1 = Math.Min(x + 1, Samples - 1);
+            for (int z = 0; z < Samples; ++z)
+            {
+                var z0 = Math.Max(z - 1, 0);
+                var z1 = Math.Min(z + 1, Samples - 1);
+                var h = height[x * Samples + z];
+                var dx = (height[x1 * Samples + z] - height[x0 * Samples + z]) / ((x1 - x0) * CellSize);
+                var dz = (height[x * Samples + z1] - height[x * Samples + z0]) / ((z1 - z0) * CellSize);
+                var slope = MathF.Sqrt(dx * dx + dz * dz);
+
+                // Surface material of this column: sand low down, rock where it is steep, grass elsewhere.
+                var surface = h < sandLevel ? 8 : slope > 0.9f ? 7 : 5;
+
+                for (int y = 0; y < Samples; ++y)
+                {
+                    var py = y * CellSize;
+                    var ground = Saturate((h - py) * 0.9f / softness);
+
+                    // Corner lamp pillars, kept so the field is lit from somewhere at night.
+                    var px = x * CellSize;
+                    var pz = z * CellSize;
+                    var inset = 1.5f * k;
+                    var cornerX = MathF.Min(MathF.Abs(px - inset), MathF.Abs(px - (Extent - inset)));
+                    var cornerZ = MathF.Min(MathF.Abs(pz - inset), MathF.Abs(pz - (Extent - inset)));
+                    var pillarRadial = 0.7f * k - MathF.Max(cornerX, cornerZ);
+                    var pillarVertical = MathF.Min(py, Extent * 0.55f - py);
+                    var pillar = Saturate(MathF.Min(pillarRadial, pillarVertical) * 1.2f / softness);
+
+                    var density = MathF.Max(ground, pillar);
+                    // Dirt below the top layer; the layer is thicker under grass than under rock.
+                    var depth = h - py;
+                    // The density ramp spans about softness cells, so the layer must be deeper than that for the surface cells to carry it.
+                    var topLayer = (surface == 7 ? softness + 1f : 2f * softness + 3f) * CellSize;
+                    var material = density <= 0f ? 0
+                                 : pillar > ground + 0.05f ? 4
+                                 : depth > topLayer ? 6
+                                 : surface;
+
+                    var index = (x * Samples + y) * Samples + z;
+                    samples[index] = (ushort)((byte)(Saturate(density) * 255f) | (material << 8));
+                }
+            }
+        }
+        return samples;
+    }
+
+    /// <summary>Fractal value noise in [0, 1].</summary>
+    private static float Fbm(float x, float y, int octaves)
+    {
+        float sum = 0f, weight = 0.5f, total = 0f;
+        for (int i = 0; i < octaves; ++i)
+        {
+            sum += ValueNoise(x, y) * weight;
+            total += weight;
+            weight *= 0.5f;
+            x = x * 2.03f + 31.7f;
+            y = y * 1.97f + 11.3f;
+        }
+        return sum / total;
+    }
+
+    private static float ValueNoise(float x, float y)
+    {
+        var xi = MathF.Floor(x);
+        var yi = MathF.Floor(y);
+        var fx = x - xi;
+        var fy = y - yi;
+        fx = fx * fx * (3f - 2f * fx);
+        fy = fy * fy * (3f - 2f * fy);
+        var a = Hash(xi, yi);
+        var b = Hash(xi + 1f, yi);
+        var c = Hash(xi, yi + 1f);
+        var d = Hash(xi + 1f, yi + 1f);
+        return (a + (b - a) * fx) * (1f - fy) + (c + (d - c) * fx) * fy;
+    }
+
+    private static float Hash(float x, float y)
+    {
+        var h = unchecked((uint)(int)x * 374761393u + (uint)(int)y * 668265263u);
+        h = (h ^ (h >> 13)) * 1274126177u;
+        return (h ^ (h >> 16)) / 4294967295f;
     }
 
     private static float Saturate(float value) => MathF.Max(0f, MathF.Min(1f, value));
@@ -331,6 +445,10 @@ public static class VoxelGridDemo
             Make(device, new Color4(0.85f, 0.90f, 0.15f, 1f), 0.6f, 0.2f),                                 // 2: the sphere, a little glossy
             Make(device, new Color4(1.00f, 0.00f, 0.88f, 1f), 0.4f, 0f, new Color4(1f, 0f, 0.88f, 1f), 3f), // 3: the arch, which glows
             Make(device, new Color4(1f, 1f, 1f, 1f), 0.3f, 0f, new Color4(1f, 1f, 1f, 1f), 2f),             // 4: the corner pillars, white lamps
+            Make(device, new Color4(0.14f, 0.34f, 0.09f, 1f), 0.15f, 0f),                                 // 5: grass
+            Make(device, new Color4(0.28f, 0.18f, 0.11f, 1f), 0.10f, 0f),                                 // 6: dirt
+            Make(device, new Color4(0.38f, 0.37f, 0.36f, 1f), 0.25f, 0f),                                 // 7: rock
+            Make(device, new Color4(0.76f, 0.68f, 0.48f, 1f), 0.20f, 0f),                                 // 8: sand
         ];
     }
 
