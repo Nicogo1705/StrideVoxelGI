@@ -856,11 +856,213 @@ public static class VoxelGridDemo
     private static float ReadDensity(int x, int y, int z)
         => (cachedSamples![(x * Samples + y) * Samples + z] & 0xFF) / 255f;
 
+
+    // -- flowing water --------------------------------------------------------------------------
+    // A cellular fluid over the field: each water cell holds an amount, falls into the cell below when it can,
+    // otherwise levels out with its four neighbours. Only cells that may still move are visited.
+
+    private const int WaterMaterial = 13;
+    private static byte[]? waterAmount;
+    private static HashSet<int> waterActive = [];
+    private static HashSet<int> waterNext = [];
+    private static float waterClock;
+
+    /// <summary>Seconds between two flow steps; one step moves water one cell.</summary>
+    public static float WaterStepSeconds { get; set; } = 0.06f;
+
+    /// <summary>How many cells are still moving.</summary>
+    public static int WaterActiveCells => waterActive.Count;
+
+    private static int Index(int x, int y, int z) => (x * Samples + y) * Samples + z;
+
+    /// <summary>Water density as the field stores it: always over the iso level, higher when fuller.</summary>
+    private static ushort PackWater(int amount) => amount <= 0 ? (ushort)0 : (ushort)((128 + amount / 2) | (WaterMaterial << 8));
+
+    /// <summary>Reads the generated lakes into the amount grid and wakes their surface.</summary>
+    private static void SeedWater()
+    {
+        if (cachedSamples is null)
+            return;
+        waterAmount = new byte[cachedSamples.Length];
+        waterActive.Clear();
+        for (int x = 0; x < Samples; ++x)
+            for (int y = 0; y < Samples; ++y)
+                for (int z = 0; z < Samples; ++z)
+                {
+                    var index = Index(x, y, z);
+                    var packed = cachedSamples[index];
+                    if ((packed >> 8) != WaterMaterial)
+                        continue;
+                    var full = (packed & 0xFF) >= 128;
+                    waterAmount[index] = full ? (byte)255 : (byte)0;
+                    cachedSamples[index] = PackWater(waterAmount[index]);
+                    if (full)
+                        waterActive.Add(index);
+                }
+    }
+
+    /// <summary>A cell water may enter: air, terrain below the iso level, or water with room left.</summary>
+    private static bool IsOpen(int index)
+    {
+        var packed = cachedSamples![index];
+        var material = packed >> 8;
+        return material == WaterMaterial ? waterAmount![index] < 255 : material == 0 || (packed & 0xFF) < 128;
+    }
+
+    private static void Wake(int x, int y, int z)
+    {
+        if (x < 0 || y < 0 || z < 0 || x >= Samples || y >= Samples || z >= Samples)
+            return;
+        var index = Index(x, y, z);
+        if (waterAmount![index] > 0)
+            waterNext.Add(index);
+    }
+
+    /// <summary>Moves some water from one cell into another and records both.</summary>
+    private static void Move(int from, int to, int amount, ref Int3 lo, ref Int3 hi)
+    {
+        waterAmount![from] = (byte)(waterAmount[from] - amount);
+        waterAmount[to] = (byte)(waterAmount[to] + amount);
+        cachedSamples![from] = PackWater(waterAmount[from]);
+        cachedSamples[to] = PackWater(waterAmount[to]);
+        Touch(from, ref lo, ref hi);
+        Touch(to, ref lo, ref hi);
+    }
+
+    private static void Touch(int index, ref Int3 lo, ref Int3 hi)
+    {
+        var z = index % Samples;
+        var y = index / Samples % Samples;
+        var x = index / (Samples * Samples);
+        lo = Int3.Min(lo, new Int3(x, y, z));
+        hi = Int3.Max(hi, new Int3(x, y, z));
+        if (gpuTexels != null)
+            WriteTexel(gpuTexels, (z * Samples + y) * Samples + x, cachedSamples![index]);
+        waterNext.Add(index);
+        Wake(x - 1, y, z); Wake(x + 1, y, z); Wake(x, y - 1, z); Wake(x, y + 1, z); Wake(x, y, z - 1); Wake(x, y, z + 1);
+    }
+
+    /// <summary>One flow step over the active cells, then the GPU copy of the touched box.</summary>
+    public static void UpdateWater(IGame game)
+    {
+        if (cachedSamples is null || waterAmount is null || waterActive.Count == 0)
+            return;
+        waterClock += (float)game.UpdateTime.Elapsed.TotalSeconds;
+        if (waterClock < WaterStepSeconds)
+            return;
+        waterClock = 0f;
+
+        var lo = new Int3(int.MaxValue);
+        var hi = new Int3(int.MinValue);
+        waterNext.Clear();
+        var n = Samples;
+        Span<int> sides = stackalloc int[4];
+        foreach (var index in waterActive)
+        {
+            var amount = (int)waterAmount[index];
+            if (amount == 0)
+                continue;
+            var z = index % n;
+            var y = index / n % n;
+            var x = index / (n * n);
+
+            // Down first: everything that fits.
+            if (y > 0)
+            {
+                var below = Index(x, y - 1, z);
+                if (IsOpen(below))
+                {
+                    var belowIsWater = (cachedSamples[below] >> 8) == WaterMaterial;
+                    if (!belowIsWater)
+                        waterAmount[below] = 0;
+                    var room = belowIsWater ? 255 - waterAmount[below] : 255;
+                    Move(index, below, Math.Min(amount, room), ref lo, ref hi);
+                    amount = waterAmount[index];
+                    if (amount == 0)
+                        continue;
+                }
+            }
+
+            // Then sideways: half the difference to each lower neighbour, so a column spreads into a sheet.
+            var count = 0;
+            if (x > 0) sides[count++] = Index(x - 1, y, z);
+            if (x < n - 1) sides[count++] = Index(x + 1, y, z);
+            if (z > 0) sides[count++] = Index(x, y, z - 1);
+            if (z < n - 1) sides[count++] = Index(x, y, z + 1);
+            for (int i = 0; i < count && amount > 8; ++i)
+            {
+                var side = sides[i];
+                if (!IsOpen(side))
+                    continue;
+                var sideIsWater = (cachedSamples[side] >> 8) == WaterMaterial;
+                if (!sideIsWater)
+                    waterAmount[side] = 0;
+                var flow = (amount - waterAmount[side]) / 2;
+                if (flow < 4)
+                    continue;
+                Move(index, side, flow, ref lo, ref hi);
+                amount = waterAmount[index];
+            }
+
+            // A film too thin to see dries up rather than creeping forever.
+            if (amount > 0 && amount < 12 && y > 0 && !IsOpen(Index(x, y - 1, z)))
+            {
+                waterAmount[index] = 0;
+                cachedSamples[index] = 0;
+                Touch(index, ref lo, ref hi);
+            }
+        }
+
+        (waterActive, waterNext) = (waterNext, waterActive);
+        if (lo.X > hi.X)
+            return;
+        UploadTexture(game.GraphicsContext.CommandList, lo, hi);
+        occupancy?.Update(game.GraphicsContext.CommandList, ReadDensity, lo, hi);
+    }
+
+    /// <summary>Adds water in a ball around a point, where there is room for it.</summary>
+    public static void Pour(IGame game, Vector3 centre, float radius)
+    {
+        if (cachedSamples is null || waterAmount is null)
+            return;
+        var lo = new Int3(int.MaxValue);
+        var hi = new Int3(int.MinValue);
+        var inverse = 1f / CellSize;
+        var c = centre * inverse;
+        var r = Math.Max(1, (int)MathF.Ceiling(radius * inverse));
+        waterNext.Clear();
+        for (int x = Math.Max(0, (int)c.X - r); x <= Math.Min(Samples - 1, (int)c.X + r); ++x)
+            for (int y = Math.Max(0, (int)c.Y - r); y <= Math.Min(Samples - 1, (int)c.Y + r); ++y)
+                for (int z = Math.Max(0, (int)c.Z - r); z <= Math.Min(Samples - 1, (int)c.Z + r); ++z)
+                {
+                    if ((new Vector3(x, y, z) - c).Length() > r)
+                        continue;
+                    var index = Index(x, y, z);
+                    if (!IsOpen(index))
+                        continue;
+                    waterAmount[index] = 255;
+                    cachedSamples[index] = PackWater(255);
+                    Touch(index, ref lo, ref hi);
+                }
+        foreach (var index in waterNext)
+            waterActive.Add(index);
+        waterNext.Clear();
+        if (lo.X > hi.X)
+            return;
+        UploadTexture(game.GraphicsContext.CommandList, lo, hi);
+        occupancy?.Update(game.GraphicsContext.CommandList, ReadDensity, lo, hi);
+    }
+
     /// <summary>Scaffolding: carve a fixed trench after this many frames, for an unattended capture.</summary>
     public static int AutoDigAfterFrames { get; set; }
 
     public static void Build(Game game, Entity camera)
-        => BuildScene(game, game.SceneSystem.SceneInstance.RootScene, camera, cachedSamples ??= Generate());
+    {
+        cachedSamples ??= Generate();
+        if (waterAmount is null)
+            SeedWater();
+        BuildScene(game, game.SceneSystem.SceneInstance.RootScene, camera, cachedSamples);
+    }
 
     private static void BuildScene(Game game, Scene scene, Entity camera, ushort[] samples)
     {

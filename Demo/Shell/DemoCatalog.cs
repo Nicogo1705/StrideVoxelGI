@@ -70,7 +70,7 @@ public static class DemoCatalog
             [
                 ShellTools,
                 Flight,
-                "Left mouse  dig      F  fill      F11  collider wireframe",
+                "Left mouse  dig      F  fill      T  pour water      F11  collider wireframe",
                 "B  drawn: cubes / MC / SN      N  material boundary: sharp / Bayer 4 / Bayer 8 / noise",
                 "C  collider: box / MC / SN / sphere      X  match the collider to what is drawn",
                 "O  the grid casts shadows      G  a voxel GI volume around the camera      L  the sun and the ambient",

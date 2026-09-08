@@ -103,8 +103,16 @@ public sealed class VoxelDigger : SyncScript
 
         var dig = Input.IsMouseButtonDown(MouseButton.Left);
         var fill = Input.IsKeyDown(Keys.F);
-        if ((!dig && !fill) || cooldown > 0f || terrain is not { } hit)
+        var pour = Input.IsKeyDown(Keys.T);
+        if ((!dig && !fill && !pour) || cooldown > 0f || terrain is not { } hit)
             return;
+
+        if (pour)
+        {
+            cooldown = Interval;
+            VoxelGridDemo.Pour(Game, hit.Point + hit.Normal * Radius, Radius * 0.7f);
+            return;
+        }
 
         cooldown = Interval;
 

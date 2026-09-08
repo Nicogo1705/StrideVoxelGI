@@ -277,6 +277,7 @@ public sealed class DemoShell : SyncScript
                 VoxelGridDemo.ToggleGI();
             if (Input.IsKeyPressed(Keys.L))
                 VoxelGridDemo.LightsEnabled = !VoxelGridDemo.LightsEnabled;
+            VoxelGridDemo.UpdateWater(HostGame);
 
         }
 
@@ -311,6 +312,7 @@ public sealed class DemoShell : SyncScript
                 $"voxel GI [G] : {(VoxelGridDemo.GIEnabled ? "around the camera" : "off")}",
                 $"lights   [L] : {(VoxelGridDemo.LightsEnabled ? "sun and ambient" : "the arch alone")}",
                 $"boundary [N] : {VoxelGridDemo.Dither}",
+                $"water    [T] : pour   ({VoxelGridDemo.WaterActiveCells} cells flowing)",
             ]
             : [], order: 1);
 
