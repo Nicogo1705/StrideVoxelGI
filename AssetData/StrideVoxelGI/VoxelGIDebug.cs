@@ -457,11 +457,16 @@ public class VoxelGIDebug : SyncScript
             return;
 
         // The profiler draws its report in the same corner; two overlapping walls of text help
-        // no one. While it is up, yield the screen - P still cycles it, N pages through it.
-        if (profilerPage != VoxelGIProfilerPage.Off)
+        // no one. While it is up, yield the screen - P still cycles it, N pages through it. The
+        // engine's own flag rather than this script's page: the shell opens the same profiler
+        // from F2, and that one must clear the corner too. The frame-rate page is a single line,
+        // so the overlay stays under it.
+        if (GameProfiler.Visible && GameProfiler.FilteringMode != GameProfilingResults.Fps)
             return;
 
         var line = OverlayPosition;
+        if (GameProfiler.Visible)
+            line.Y += 18;
         void Print(string text)
         {
             DebugText.Print(text, line);

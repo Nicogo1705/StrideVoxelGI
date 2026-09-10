@@ -135,6 +135,10 @@ public sealed class DemoShell : SyncScript
 
     public override void Start()
     {
+        // The engine shows the debug text overlay only when the entry assembly is a Debug build.
+        // Every key list and the voxel GI panel go through it, so a Release build had no UI at all.
+        DebugText.Visible = true;
+
         var regular = Content.Load<SpriteFont>("MenuFont");
         var bold = Content.Load<SpriteFont>("MenuFontBold");
 
