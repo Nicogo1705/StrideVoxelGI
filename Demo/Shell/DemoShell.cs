@@ -312,7 +312,7 @@ public sealed class DemoShell : SyncScript
                 $"voxel GI [G] : {(VoxelGridDemo.GIEnabled ? "around the camera" : "off")}",
                 $"lights   [L] : {(VoxelGridDemo.LightsEnabled ? "sun and ambient" : "the arch alone")}",
                 $"boundary [N] : {VoxelGridDemo.Dither}",
-                $"water    [T] : pour   ({VoxelGridDemo.WaterActiveCells} cells flowing)",
+                $"water    [T] : pour   ({VoxelGridDemo.WaterStatus})",
             ]
             : [], order: 1);
 
