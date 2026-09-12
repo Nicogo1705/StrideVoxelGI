@@ -32,8 +32,10 @@ namespace Demo
         /// How much a cell can hold over one, per cell of water above it; the pressure that lifts water.
         stage float MaxCompress;
 
-        /// Hand-overs under this are not made, so a sheet comes to rest instead of trading crumbs forever.
-        stage float MinFlow;
+        /// Amounts and hand-overs are multiples of this (a power of two, exact in a half float), so a
+        /// sheet at rest is exactly still: no crumb is traded forever, and a brick that nobody wrote
+        /// holds the same bits in both textures.
+        stage float Quantum;
 
         /// A film thinner than this soaks away.
         stage float Soak;
@@ -71,7 +73,7 @@ namespace Demo
 
         float Quantized(float flow)
         {
-            return flow < MinFlow ? 0.0 : flow;
+            return floor(flow / Quantum + 1e-4) * Quantum;
         }
 
         /// Water a sender at s holding a hands to the cell below it.
@@ -84,12 +86,18 @@ namespace Demo
             return Quantized(clamp(StableBelow(a + b) - b, 0.0, a));
         }
 
-        /// Water a sender holding rem (after its downward hand-over) hands to a lateral neighbour n.
+        /// Water a sender holding rem (after its downward hand-over) hands to a lateral neighbour n:
+        /// a fifth of the difference - the most four neighbours can take at once while the sender
+        /// keeps a share, which is what stops a checkerboard - and never under one quantum, so two
+        /// neighbours end within a quantum of each other rather than a fifth apart.
         float Lateral(int3 n, float rem)
         {
             if (Solid(n))
                 return 0.0;
-            return Quantized(max(0.0, (rem - Amount(n)) * 0.125));
+            float diff = rem - Amount(n);
+            if (diff < 2.0 * Quantum)
+                return 0.0;
+            return Quantized(min(max(diff * 0.2, Quantum), rem * 0.25));
         }
 
         /// What is left in a sender after down and sideways, from which the upward hand-over is taken.
@@ -154,7 +162,7 @@ namespace Demo
                     if (!Solid(below))
                         inflow += Up(below, Remaining(below, Amount(below)));
 
-                    value = rem2 - up + inflow;
+                    value = round((rem2 - up + inflow) / Quantum) * Quantum;
                     if (value < Soak)
                         value = 0.0;
 

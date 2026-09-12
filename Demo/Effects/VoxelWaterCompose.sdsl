@@ -18,6 +18,13 @@ namespace Demo
         /// The water's material id, as the texture stores it: id / 255.
         stage float WaterMaterial;
 
+        /// A cell holding at least FilmMin, with less than a full cell under it, is drawn as a film at
+        /// least FilmDensity dense: the ramp alone puts a thin layer's surface under its own sample,
+        /// inside whatever is below, so a trickle down a slope was invisible until it pooled, and the
+        /// rim of a spreading sheet flickered in and out across the iso level.
+        stage float FilmMin;
+        stage float FilmDensity;
+
         float Amount(int3 c)
         {
             if (any(c < 0) || any(c >= SampleCount))
@@ -57,7 +64,10 @@ namespace Demo
                 return;
 
             float2 terrain = Terrain.Load(int4(c, 0));
-            float water = saturate(0.5 + 0.5 * SurfaceOffset(c, Amount(c)));
+            float f = Amount(c);
+            float water = saturate(0.5 + 0.5 * SurfaceOffset(c, f));
+            if (f >= FilmMin && f < 1.0 && Amount(c - int3(0, 1, 0)) < 1.0)
+                water = max(water, FilmDensity);
             // Never under what the terrain already holds there, and nothing for a trace that would not draw.
             if (water > terrain.r && water >= 8.0 / 255.0)
                 FieldOut[c] = float2(water, WaterMaterial);

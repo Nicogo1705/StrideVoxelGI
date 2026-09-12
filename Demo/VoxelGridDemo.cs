@@ -575,6 +575,9 @@ public static class VoxelGridDemo
     // are dim enough not to saturate it away, four clears it.
     public static float StartConeOffset { get; set; } = 4f;
 
+    /// <summary>GI tier to start on, from --quality; null takes the scene's own (UltraPlus, Ultra for --big).</summary>
+    public static VoxelGIQuality? StartQuality { get; set; }
+
     /// <summary>Start with the GI volume around the camera, from --gi.</summary>
     public static bool StartWithGI { get; set; }
 
@@ -672,7 +675,7 @@ public static class VoxelGridDemo
             // ring over the whole field at once, so following the camera has little to re-snap.
             VolumeSize = big ? Extent * 4f : Extent * 4f,
             ClipMapLevels = big ? 6 : 3,
-            Quality = big ? VoxelGIQuality.Ultra : VoxelGIQuality.UltraPlus,
+            Quality = StartQuality ?? (big ? VoxelGIQuality.Ultra : VoxelGIQuality.UltraPlus),
             GIResolutionDivisor = big ? 2 : 0,
             SkyColor = StartSky,
             SkyIntensity = StartSkyIntensity,

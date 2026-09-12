@@ -54,11 +54,20 @@ public sealed class VoxelWater : IDisposable
     /// <summary>How much a cell can hold over one per cell of water above it: the pressure that lifts water.</summary>
     public float MaxCompress { get; set; } = 0.02f;
 
-    /// <summary>Hand-overs under this are not made, so a sheet comes to rest; kept above a half-float's step near one.</summary>
-    public float MinFlow { get; set; } = 0.002f;
+    /// <summary>Amounts and hand-overs are multiples of this; a power of two, so every value is exact in a half float.</summary>
+    public float Quantum { get; set; } = 1f / 256f;
 
-    /// <summary>A film thinner than this soaks away.</summary>
-    public float Soak { get; set; } = 0.005f;
+    /// <summary>A film thinner than this soaks away: two quanta, so no residue is left trading single quanta.</summary>
+    public float Soak { get; set; } = 2.5f / 256f;
+
+    /// <summary>A cell with this much or more, over less than a full cell, is drawn as a film; see VoxelWaterCompose.</summary>
+    public float FilmMin { get; set; } = 0.05f;
+
+    /// <summary>The least density a film is drawn with: a shade over the iso level, a thin sheet on the ground.</summary>
+    public float FilmDensity { get; set; } = 0.5625f;
+
+    /// <summary>Flow steps per <see cref="Step"/>: the water moves a cell per sub-step, the drawing is redone once.</summary>
+    public int Substeps { get; set; } = 3;
 
     /// <summary>Steps taken so far.</summary>
     public int StepCount { get; private set; }
@@ -69,6 +78,7 @@ public sealed class VoxelWater : IDisposable
     private int current;
     private readonly Texture active;
     private readonly Texture changed;
+    private readonly Texture drawn;
     private readonly Texture[] fieldLevels;
     private readonly Texture[] occupancyLevels;
 
@@ -93,9 +103,13 @@ public sealed class VoxelWater : IDisposable
         for (int i = 0; i < 2; i++)
             amounts[i] = Texture.New3D(device, samples, samples, samples, 1, PixelFormat.R16_Float,
                 TextureFlags.ShaderResource | TextureFlags.UnorderedAccess, GraphicsResourceUsage.Default);
-        active = Texture.New3D(device, BrickCount.X, BrickCount.Y, BrickCount.Z, 1, PixelFormat.R8_UInt,
+        // 32-bit flags: the spread pass reads its own Drawn output back, and a typed UAV load is only
+        // allowed on 32-bit single-channel formats.
+        active = Texture.New3D(device, BrickCount.X, BrickCount.Y, BrickCount.Z, 1, PixelFormat.R32_UInt,
             TextureFlags.ShaderResource | TextureFlags.UnorderedAccess, GraphicsResourceUsage.Default);
-        changed = Texture.New3D(device, BrickCount.X, BrickCount.Y, BrickCount.Z, 1, PixelFormat.R8_UInt,
+        changed = Texture.New3D(device, BrickCount.X, BrickCount.Y, BrickCount.Z, 1, PixelFormat.R32_UInt,
+            TextureFlags.ShaderResource | TextureFlags.UnorderedAccess, GraphicsResourceUsage.Default);
+        drawn = Texture.New3D(device, BrickCount.X, BrickCount.Y, BrickCount.Z, 1, PixelFormat.R32_UInt,
             TextureFlags.ShaderResource | TextureFlags.UnorderedAccess, GraphicsResourceUsage.Default);
         Occupancy = new VoxelGridOccupancy(device, SampleCount, unorderedAccess: true);
 
@@ -161,8 +175,8 @@ public sealed class VoxelWater : IDisposable
         var extent = b1 - b0 + Int3.One;
         if (extent.X <= 0 || extent.Y <= 0 || extent.Z <= 0)
             return;
-        var ones = new byte[extent.X * extent.Y * extent.Z];
-        Array.Fill(ones, (byte)1);
+        var ones = new uint[extent.X * extent.Y * extent.Z];
+        Array.Fill(ones, 1u);
         changed.SetData(CommandList, ones, 0, 0, new ResourceRegion(b0.X, b0.Y, b0.Z, b1.X + 1, b1.Y + 1, b1.Z + 1));
     }
 
@@ -195,36 +209,43 @@ public sealed class VoxelWater : IDisposable
         occupancyBase ??= new ComputeEffectShader(renderContext) { ShaderSourceName = "VoxelWaterOccupancyBase" };
         occupancyUp ??= new ComputeEffectShader(renderContext) { ShaderSourceName = "VoxelWaterOccupancyUp" };
 
-        // Which bricks run: those that changed, and their neighbours.
-        spread.Parameters.Set(VoxelWaterSpreadKeys.ChangedBricks, changed);
-        spread.Parameters.Set(VoxelWaterSpreadKeys.ActiveOut, active);
-        spread.Parameters.Set(VoxelWaterSpreadKeys.BrickCount, BrickCount);
-        Dispatch(spread, new Int3(4), BrickCount);
+        for (int substep = 0; substep < Math.Max(Substeps, 1); substep++)
+        {
+            // Which bricks run: those that changed, and their neighbours.
+            spread.Parameters.Set(VoxelWaterSpreadKeys.ChangedBricks, changed);
+            spread.Parameters.Set(VoxelWaterSpreadKeys.ActiveOut, active);
+            spread.Parameters.Set(VoxelWaterSpreadKeys.DrawnOut, drawn);
+            spread.Parameters.Set(VoxelWaterSpreadKeys.Reset, substep == 0 ? 1 : 0);
+            spread.Parameters.Set(VoxelWaterSpreadKeys.BrickCount, BrickCount);
+            Dispatch(spread, new Int3(4), BrickCount);
 
-        // The water moves, from one texture into the other.
-        var next = 1 - current;
-        Bricks(step.Parameters);
-        step.Parameters.Set(VoxelWaterStepKeys.ChangedOut, changed);
-        step.Parameters.Set(VoxelWaterStepKeys.Terrain, Terrain);
-        step.Parameters.Set(VoxelWaterStepKeys.Amounts, amounts[current]);
-        step.Parameters.Set(VoxelWaterStepKeys.AmountsOut, amounts[next]);
-        step.Parameters.Set(VoxelWaterStepKeys.IsoLevel, isoLevel);
-        step.Parameters.Set(VoxelWaterStepKeys.MaxCompress, MaxCompress);
-        step.Parameters.Set(VoxelWaterStepKeys.MinFlow, MinFlow);
-        step.Parameters.Set(VoxelWaterStepKeys.Soak, Soak);
-        step.Parameters.Set(VoxelWaterStepKeys.PourCentre, pourCentre);
-        step.Parameters.Set(VoxelWaterStepKeys.PourRadius, pourRadius);
-        step.Parameters.Set(VoxelWaterStepKeys.PourAmount, pourAmount);
-        Dispatch(step, new Int3(BrickSize), SampleCount);
-        current = next;
-        pourRadius = 0f;
+            // The water moves, from one texture into the other.
+            var next = 1 - current;
+            Bricks(step.Parameters, active);
+            step.Parameters.Set(VoxelWaterStepKeys.ChangedOut, changed);
+            step.Parameters.Set(VoxelWaterStepKeys.Terrain, Terrain);
+            step.Parameters.Set(VoxelWaterStepKeys.Amounts, amounts[current]);
+            step.Parameters.Set(VoxelWaterStepKeys.AmountsOut, amounts[next]);
+            step.Parameters.Set(VoxelWaterStepKeys.IsoLevel, isoLevel);
+            step.Parameters.Set(VoxelWaterStepKeys.MaxCompress, MaxCompress);
+            step.Parameters.Set(VoxelWaterStepKeys.Quantum, Quantum);
+            step.Parameters.Set(VoxelWaterStepKeys.Soak, Soak);
+            step.Parameters.Set(VoxelWaterStepKeys.PourCentre, pourCentre);
+            step.Parameters.Set(VoxelWaterStepKeys.PourRadius, pourRadius);
+            step.Parameters.Set(VoxelWaterStepKeys.PourAmount, pourAmount);
+            Dispatch(step, new Int3(BrickSize), SampleCount);
+            current = next;
+            pourRadius = 0f;
+        }
 
-        // The drawn field, finest level, where it ran.
-        Bricks(compose.Parameters);
+        // The drawn field, finest level, over every brick that ran.
+        Bricks(compose.Parameters, drawn);
         compose.Parameters.Set(VoxelWaterComposeKeys.Terrain, Terrain);
         compose.Parameters.Set(VoxelWaterComposeKeys.Amounts, amounts[current]);
         compose.Parameters.Set(VoxelWaterComposeKeys.FieldOut, fieldLevels[0]);
         compose.Parameters.Set(VoxelWaterComposeKeys.WaterMaterial, WaterMaterial / 255f);
+        compose.Parameters.Set(VoxelWaterComposeKeys.FilmMin, FilmMin);
+        compose.Parameters.Set(VoxelWaterComposeKeys.FilmDensity, FilmDensity);
         Dispatch(compose, new Int3(BrickSize), SampleCount);
 
         // Its mips, each from the one above, where their sources changed.
@@ -232,7 +253,7 @@ public sealed class VoxelWater : IDisposable
         {
             var sourceSize = new Int3(Texture.CalculateMipSize(Samples, level - 1));
             var targetSize = new Int3(Texture.CalculateMipSize(Samples, level));
-            Bricks(mip.Parameters);
+            Bricks(mip.Parameters, drawn);
             mip.Parameters.Set(VoxelWaterMipKeys.Source, fieldLevels[level - 1]);
             mip.Parameters.Set(VoxelWaterMipKeys.Target, fieldLevels[level]);
             mip.Parameters.Set(VoxelWaterMipKeys.SourceSize, sourceSize);
@@ -243,7 +264,7 @@ public sealed class VoxelWater : IDisposable
 
         // The pyramid: the base from the field, each level from the one under it.
         var baseSize = new Int3(Occupancy.Texture.Width);
-        Bricks(occupancyBase.Parameters);
+        Bricks(occupancyBase.Parameters, drawn);
         occupancyBase.Parameters.Set(VoxelWaterOccupancyBaseKeys.Field, fieldLevels[0]);
         occupancyBase.Parameters.Set(VoxelWaterOccupancyBaseKeys.Target, occupancyLevels[0]);
         occupancyBase.Parameters.Set(VoxelWaterOccupancyBaseKeys.TargetSize, baseSize);
@@ -252,7 +273,7 @@ public sealed class VoxelWater : IDisposable
         {
             var sourceSize = new Int3(Texture.CalculateMipSize(Occupancy.Texture.Width, level - 1));
             var targetSize = new Int3(Texture.CalculateMipSize(Occupancy.Texture.Width, level));
-            Bricks(occupancyUp.Parameters);
+            Bricks(occupancyUp.Parameters, drawn);
             occupancyUp.Parameters.Set(VoxelWaterOccupancyUpKeys.Source, occupancyLevels[level - 1]);
             occupancyUp.Parameters.Set(VoxelWaterOccupancyUpKeys.Target, occupancyLevels[level]);
             occupancyUp.Parameters.Set(VoxelWaterOccupancyUpKeys.SourceSize, sourceSize);
@@ -264,9 +285,9 @@ public sealed class VoxelWater : IDisposable
         StepCount++;
     }
 
-    private void Bricks(ParameterCollection parameters)
+    private void Bricks(ParameterCollection parameters, Texture bricks)
     {
-        parameters.Set(VoxelWaterBricksKeys.ActiveBricks, active);
+        parameters.Set(VoxelWaterBricksKeys.ActiveBricks, bricks);
         parameters.Set(VoxelWaterBricksKeys.SampleCount, SampleCount);
         parameters.Set(VoxelWaterBricksKeys.BrickCount, BrickCount);
     }
@@ -296,6 +317,7 @@ public sealed class VoxelWater : IDisposable
         Occupancy.Dispose();
         active.Dispose();
         changed.Dispose();
+        drawn.Dispose();
         amounts[0].Dispose();
         amounts[1].Dispose();
         Field.Dispose();

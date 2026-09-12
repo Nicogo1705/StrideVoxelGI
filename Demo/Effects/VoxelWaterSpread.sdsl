@@ -9,6 +9,13 @@ namespace Demo
     {
         stage Texture3D<uint> ChangedBricks;
         stage RWTexture3D<uint> ActiveOut;
+
+        /// Every brick that was active on any sub-step of this step, for the passes that draw the field
+        /// once after them all. Reset on the first sub-step, or a brick that settled on it would be
+        /// dropped by the last spread and drawn from stale amounts.
+        stage RWTexture3D<uint> DrawnOut;
+        stage int Reset;
+
         stage int3 BrickCount;
 
         uint Changed(int3 b)
@@ -27,7 +34,9 @@ namespace Demo
                 | Changed(b + int3(1, 0, 0)) | Changed(b - int3(1, 0, 0))
                 | Changed(b + int3(0, 1, 0)) | Changed(b - int3(0, 1, 0))
                 | Changed(b + int3(0, 0, 1)) | Changed(b - int3(0, 0, 1));
-            ActiveOut[b] = active != 0 ? 1 : 0;
+            uint on = active != 0 ? 1 : 0;
+            ActiveOut[b] = on;
+            DrawnOut[b] = Reset != 0 ? on : (DrawnOut[b] | on);
         }
     };
 }

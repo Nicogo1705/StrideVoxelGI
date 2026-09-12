@@ -278,6 +278,8 @@ game.Script.AddTask(async () =>
     VoxelGridDemo.StartSkyIntensity = ParseFloat(Option("--sky"), VoxelGridDemo.StartSkyIntensity);
     VoxelGridDemo.StartWithGI = args.Contains("--gi") || args.Contains("--gi-only");
     VoxelGridDemo.StartWithLights = !args.Contains("--gi-only");
+    // The same --quality the tour takes, for the volume the grid scene builds around the camera.
+    VoxelGridDemo.StartQuality = ParseQuality(Option("--quality"));
 
     if (float.TryParse(Environment.GetEnvironmentVariable("STRIDE_VOXEL_DEBUG"), NumberStyles.Float, CultureInfo.InvariantCulture, out var debugView))
         VoxelGridDemo.DebugView = debugView;
