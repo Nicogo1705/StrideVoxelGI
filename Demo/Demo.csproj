@@ -48,5 +48,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\AssetData\StrideVoxelGI\StrideVoxelGI.csproj" />
+    <!-- C#SL: the runtime the generated shader wrappers run on, and the generator that writes one
+         <Shader>Effect class per compute shader from the .sdsl files under Effects/. -->
+    <ProjectReference Include="..\CSharpShaders\Csl.Runtime\Csl.Runtime.csproj" />
+    <ProjectReference Include="..\CSharpShaders\Csl.Generators\Csl.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 </Project>
