@@ -62,6 +62,9 @@ public sealed class SdslShader
 
     /// <summary>Resource members by name with what the bodies do to them.</summary>
     public Dictionary<string, SdslAccess> Usage { get; } = new Dictionary<string, SdslAccess>();
+
+    /// <summary>The thread group size the shader was written for ([NumThreads] on a C# shader), or null.</summary>
+    public (int X, int Y, int Z)? DefaultThreads { get; set; }
 }
 
 public sealed class SdslMember

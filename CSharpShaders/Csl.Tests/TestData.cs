@@ -31,7 +31,7 @@ internal static class TestData
         return source.SourceText.ToString();
     }
 
-    private sealed class FileAdditionalText : AdditionalText
+    internal sealed class FileAdditionalText : AdditionalText
     {
         public FileAdditionalText(string path) => Path = path;
         public override string Path { get; }

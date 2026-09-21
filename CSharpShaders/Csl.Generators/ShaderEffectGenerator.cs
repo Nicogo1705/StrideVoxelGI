@@ -3,15 +3,19 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Threading;
+using Csl.Generators.CSharp;
 using Csl.Generators.Sdsl;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Csl.Generators;
 
 /// <summary>
 /// One <c>&lt;Shader&gt;Effect</c> class per compute shader of the project, from the .sdsl files the
-/// Stride SDK already passes as AdditionalFiles. A shader that other compute shaders inherit gets an
-/// abstract wrapper carrying its parameters, so they are set the same way from every pass.
+/// Stride SDK already passes as AdditionalFiles and from the [Shader] classes written in C#. A shader
+/// that other compute shaders inherit gets an abstract wrapper carrying its parameters, so they are
+/// set the same way from every pass. A C# shader also gets its SDSL (registered with the effect
+/// compiler at start-up, and kept as <c>SdslSource</c> on the class) and its *Keys class.
 /// </summary>
 [Generator(LanguageNames.CSharp)]
 public sealed class ShaderEffectGenerator : IIncrementalGenerator
@@ -24,10 +28,15 @@ public sealed class ShaderEffectGenerator : IIncrementalGenerator
             .Where(static text => text.Path.EndsWith(".sdsl", StringComparison.OrdinalIgnoreCase))
             .Select(static (text, cancellation) => (text.Path, Text: text.GetText(cancellation)?.ToString() ?? string.Empty))
             .Collect();
-        context.RegisterSourceOutput(files, static (production, all) => Generate(production, all));
+        var shaders = context.SyntaxProvider
+            .ForAttributeWithMetadataName("Csl.ShaderAttribute",
+                static (node, _) => node is ClassDeclarationSyntax,
+                static (syntaxContext, cancellation) => ShaderTranslator.Translate((INamedTypeSymbol)syntaxContext.TargetSymbol, syntaxContext.SemanticModel.Compilation, cancellation))
+            .Collect();
+        context.RegisterSourceOutput(files.Combine(shaders), static (production, inputs) => Generate(production, inputs.Left, inputs.Right));
     }
 
-    private static void Generate(SourceProductionContext production, ImmutableArray<(string Path, string Text)> inputs)
+    private static void Generate(SourceProductionContext production, ImmutableArray<(string Path, string Text)> inputs, ImmutableArray<TranslatedShader> translated)
     {
         var files = new List<SdslFile>();
         foreach (var (path, text) in inputs.OrderBy(i => i.Path, StringComparer.Ordinal))
@@ -38,6 +47,38 @@ public sealed class ShaderEffectGenerator : IIncrementalGenerator
             foreach (var error in file.Errors)
                 production.ReportDiagnostic(Diagnostic.Create(Diagnostics.SdslParseProblem, Diagnostics.FileLocation(path, error.Line, error.Column), error.Message));
         }
+
+        // Shaders written in C#: their SDSL is parsed like a file, so keys and wrappers come out the same way.
+        var fromCSharp = new Dictionary<string, TranslatedShader>(StringComparer.Ordinal);
+        foreach (var shader in translated.OrderBy(t => t.Path, StringComparer.Ordinal).ThenBy(t => t.ClassName, StringComparer.Ordinal))
+        {
+            production.CancellationToken.ThrowIfCancellationRequested();
+            foreach (var diagnostic in shader.Diagnostics)
+                production.ReportDiagnostic(diagnostic);
+            if (shader.MixinStubs != null)
+                production.AddSource(shader.ClassName + ".Mixins.g.cs", shader.MixinStubs);
+            if (shader.IsExternal || shader.Sdsl == null)
+                continue;
+            var existing = files.SelectMany(f => f.Shaders, (f, s) => (File: f, Shader: s)).FirstOrDefault(e => e.Shader.Name == shader.ShaderName);
+            if (existing.File != null)
+            {
+                production.ReportDiagnostic(Diagnostic.Create(Diagnostics.ShaderNameClash, Diagnostics.FileLocation(shader.Path, 1, 1), shader.ShaderName, existing.File.Path));
+                continue;
+            }
+            var file = SdslParser.Parse(shader.Path, shader.Sdsl);
+            foreach (var error in file.Errors)
+                production.ReportDiagnostic(Diagnostic.Create(Diagnostics.SdslParseProblem, Diagnostics.FileLocation(shader.Path, error.Line, error.Column), "generated SDSL: " + error.Message));
+            foreach (var parsed in file.Shaders)
+                parsed.DefaultThreads = shader.NumThreads;
+            files.Add(file);
+            fromCSharp[shader.ShaderName] = shader;
+            var keysNamespace = shader.Namespace ?? "Stride.Rendering";
+            foreach (var parsed in file.Shaders)
+                production.AddSource(parsed.Name + "Keys.g.cs", KeysEmitter.Emit(parsed, keysNamespace));
+            production.AddSource(shader.ClassName + ".Sdsl.g.cs", SdslSourceEmitter.EmitPartial(shader));
+        }
+        if (fromCSharp.Count > 0)
+            production.AddSource("CslShaderSources.g.cs", SdslSourceEmitter.EmitRegistration(fromCSharp.Values.OrderBy(s => s.ShaderName, StringComparer.Ordinal)));
 
         var shaders = new Dictionary<string, (SdslShader Shader, SdslFile File)>(StringComparer.Ordinal);
         foreach (var file in files)
@@ -117,7 +158,7 @@ public sealed class ShaderEffectGenerator : IIncrementalGenerator
         Dictionary<string, bool> isCompute, HashSet<string> emitted, SourceProductionContext production)
     {
         var (shader, file) = shaders[name];
-        var model = new WrapperModel(name, file.Namespace, file.Namespace ?? "Stride.Rendering") { IsCompute = isCompute[name] };
+        var model = new WrapperModel(name, file.Namespace, file.Namespace ?? "Stride.Rendering") { IsCompute = isCompute[name], DefaultThreads = shader.DefaultThreads };
         model.Doc.AddRange(shader.Doc);
 
         // The C# base: the first base with a wrapper. Its ancestors come with it; every other project

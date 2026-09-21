@@ -27,6 +27,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../Csl.Runtime/Csl.Runtime.csproj" />
+    <ProjectReference Include="../Csl.Types/Csl.Types.csproj" />
     <!-- Referenced as a library for the driver tests, and applied as an analyzer to this very project. -->
     <ProjectReference Include="../Csl.Generators/Csl.Generators.csproj" />
     <Analyzer Include="../Csl.Generators/bin/$(Configuration)/netstandard2.0/Csl.Generators.dll" />

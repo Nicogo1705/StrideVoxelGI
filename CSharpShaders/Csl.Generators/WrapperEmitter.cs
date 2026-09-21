@@ -53,6 +53,16 @@ public static class WrapperEmitter
             sb.Append(inner).AppendLine("/// <summary>Creates the shader with the same thread count on every axis.</summary>");
             sb.Append(inner).Append("public ").Append(model.ClassName)
               .AppendLine("(IServiceRegistry services, int threads) : this(services, new Int3(threads)) { }");
+            if (model.DefaultThreads is { } threads)
+            {
+                sb.Append(inner).Append("/// <summary>The thread group size the shader declares: [NumThreads(")
+                  .Append(threads.X).Append(", ").Append(threads.Y).Append(", ").Append(threads.Z).AppendLine(")].</summary>");
+                sb.Append(inner).Append("public static ").Append(model.BaseIsCompute ? "new " : string.Empty).Append("readonly Int3 DefaultThreadNumbers = new Int3(")
+                  .Append(threads.X).Append(", ").Append(threads.Y).Append(", ").Append(threads.Z).AppendLine(");");
+                sb.Append(inner).AppendLine("/// <summary>Creates the shader with the thread group size it declares.</summary>");
+                sb.Append(inner).Append("public ").Append(model.ClassName)
+                  .AppendLine("(IServiceRegistry services) : this(services, DefaultThreadNumbers) { }");
+            }
             sb.AppendLine();
         }
         sb.Append(inner).AppendLine("/// <summary>For a shader that inherits this one.</summary>");

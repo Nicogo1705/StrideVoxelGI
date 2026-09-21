@@ -34,6 +34,9 @@ public sealed class WrapperModel
     /// <summary>Inherits ComputeShaderBase, so it can be dispatched; otherwise it is a mixin, and abstract.</summary>
     public bool IsCompute { get; set; }
 
+    /// <summary>[NumThreads] of a C# shader: the wrapper gets a constructor that uses it.</summary>
+    public (int X, int Y, int Z)? DefaultThreads { get; set; }
+
     public List<string> Doc { get; } = new List<string>();
     public List<PropertyModel> Properties { get; } = new List<PropertyModel>();
 }

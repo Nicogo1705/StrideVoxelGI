@@ -18,6 +18,8 @@ public sealed class ShaderContext
         Game = services.GetSafeServiceAs<IGame>();
         RenderContext = RenderContext.GetShared(services);
         DrawContext = new RenderDrawContext(services, RenderContext, Game.GraphicsContext);
+        // The shaders written in C# reach the effect compiler here, before the first dispatch.
+        ShaderSourceRegistry.InstallInto(services.GetSafeServiceAs<EffectSystem>());
     }
 
     public IServiceRegistry Services { get; }
