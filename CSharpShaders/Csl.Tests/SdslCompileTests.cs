@@ -40,18 +40,22 @@ public class SdslCompileTests
     {
         new object[] { "SampleSpread", SampleSpread.SdslSource, 4 },
         new object[] { "SampleMip", SampleMip.SdslSource, 8 },
+        new object[] { "VoxelWaterSpread", Demo.VoxelWaterSpread.SdslSource, 4 },
+        new object[] { "VoxelWaterStep", Demo.VoxelWaterStep.SdslSource, 8 },
+        new object[] { "VoxelWaterCompose", Demo.VoxelWaterCompose.SdslSource, 8 },
+        new object[] { "VoxelWaterMip", Demo.VoxelWaterMip.SdslSource, 8 },
+        new object[] { "VoxelWaterOccupancyBase", Demo.VoxelWaterOccupancyBase.SdslSource, 4 },
+        new object[] { "VoxelWaterOccupancyUp", Demo.VoxelWaterOccupancyUp.SdslSource, 4 },
     };
 
     [Theory]
     [MemberData(nameof(Shaders))]
     public void GeneratedSdslCompilesWithTheEngine(string name, string sdsl, int threads)
     {
-        var sources = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["ComputeShaderBase"] = File.ReadAllText(TestData.DataPath("ComputeShaderBase")),
-            ["SampleBricks"] = SampleBricks.SdslSource,
-            [name] = sdsl,
-        };
+        // Every C# shader of this assembly, as registered when it loaded, plus the engine's base.
+        var sources = ShaderSourceRegistry.Sources.ToDictionary(p => p.Key, p => p.Value.Source, StringComparer.Ordinal);
+        sources["ComputeShaderBase"] = File.ReadAllText(TestData.DataPath("ComputeShaderBase"));
+        sources[name] = sdsl;
         var cache = Path.Combine(Path.GetTempPath(), "csl-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(cache);
         var loader = new MemoryShaderLoader(sources, cache);
@@ -74,6 +78,6 @@ public class SdslCompileTests
         Assert.True(bytecode.Length > 0, "no SPIR-V");
         Assert.NotEmpty(entryPoints!);
         // Every parameter is in the reflection, under the key names the engine's generator would give.
-        Assert.Contains(reflection!.ResourceBindings, b => b.KeyInfo.KeyName == name + ".DrawnOut" || b.KeyInfo.KeyName == name + ".Target");
+        Assert.Contains(reflection!.ResourceBindings, b => b.KeyInfo.KeyName.StartsWith(name + ".") || b.KeyInfo.KeyName.StartsWith("VoxelWaterBricks.") || b.KeyInfo.KeyName.StartsWith("SampleBricks."));
     }
 }

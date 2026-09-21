@@ -5,7 +5,9 @@
   <Folder Name="/CSharpShaders/">
     <Project Path="CSharpShaders/Csl.Generators/Csl.Generators.csproj" />
     <Project Path="CSharpShaders/Csl.Runtime/Csl.Runtime.csproj" />
+    <Project Path="CSharpShaders/Csl.Stubs/Csl.Stubs.csproj" />
     <Project Path="CSharpShaders/Csl.Tests/Csl.Tests.csproj" />
+    <Project Path="CSharpShaders/Csl.Types/Csl.Types.csproj" />
   </Folder>
   <Project Path="Demo/Demo.csproj" />
 </Solution>

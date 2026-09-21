@@ -34,10 +34,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <AdditionalFiles Include="../../Demo/Effects/*.sdsl" Link="Shaders/%(Filename)%(Extension)" />
-    <!-- The demo's water, as rewritten on the wrappers: it has to compile against what the generator emits. -->
+    <!-- The demo's water shaders, written in C#, and the water on their wrappers: both have to build
+         against what the generator emits. The original .sdsl are test data for the parser. -->
+    <Compile Include="../../Demo/Shaders/*.cs" Link="Demo/Shaders/%(Filename)%(Extension)" />
     <Compile Include="../../Demo/VoxelWater.cs" Link="Demo/VoxelWater.cs" />
-    <Content Include="../../Demo/Effects/*.sdsl" Link="Shaders/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Compile Include="../../Demo/WaterEquivalence.cs" Link="Demo/WaterEquivalence.cs" />
+    <Content Include="../../Demo/Effects/Reference/*.sdsl.txt" Link="Shaders/%(Filename)" CopyToOutputDirectory="PreserveNewest" />
     <!-- Engine shaders kept as parser test data only, not shaders of this project: out of the SDK's glob. -->
     <Content Include="Data/*.sdsl" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using Demo;
 using Demo.Shell;
@@ -37,6 +38,9 @@ using StrideVoxelGI;
 //   --quality=potato|low|medium|high|ultra|ultraplus   switch the volume to that preset first
 //   --divisor=1|2|4        trace the diffuse cones at 1/N of the screen and upsample
 //   --igpu                 keep whatever GPU Windows hands out instead of asking for the best one
+//   --water-steps=N        with --voxelgrid: run N water steps, dump amounts and field, compare with the other mode, exit
+//   --water-shaders=reference   run the original .sdsl water shaders instead of the C# ones (see WaterEquivalence)
+//   --dump-sdsl=DIR        write the SDSL generated from the C# shaders to DIR, then carry on
 //
 // Synthesized key presses do not reach Stride's input, so P and Ctrl+S are out of reach for
 // anything running the demo from the outside. Without these arguments nothing below happens and
@@ -273,6 +277,13 @@ game.Script.AddTask(async () =>
         }
     }
     VoxelGridDemo.Earth = args.Contains("--earth");
+    // The C# shaders against the SDSL they replaced: see WaterEquivalence.
+    WaterEquivalence.Steps = ParseInt(Option("--water-steps"), 0);
+    WaterEquivalence.OutputDirectory = Option("--out");
+    if (Option("--water-shaders") == "reference")
+        WaterEquivalence.UseReferenceShaders();
+    if (Option("--dump-sdsl") is { } dumpDirectory)
+        Csl.ShaderSourceRegistry.DumpTo(Path.IsPathRooted(dumpDirectory) ? dumpDirectory : Path.Combine(AppContext.BaseDirectory, dumpDirectory));
     VoxelGridDemo.StartBeamBlockSize = ParseInt(Option("--beam"), VoxelGridDemo.StartBeamBlockSize);
     VoxelGridDemo.StartLodBias = args.Contains("--no-lod") ? float.NaN : ParseFloat(Option("--lod-bias"), VoxelGridDemo.StartLodBias);
     VoxelGridDemo.StartSkyIntensity = ParseFloat(Option("--sky"), VoxelGridDemo.StartSkyIntensity);

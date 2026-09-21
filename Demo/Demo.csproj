@@ -51,6 +51,14 @@
     <!-- C#SL: the runtime the generated shader wrappers run on, and the generator that writes one
          <Shader>Effect class per compute shader from the .sdsl files under Effects/. -->
     <ProjectReference Include="..\CSharpShaders\Csl.Runtime\Csl.Runtime.csproj" />
+    <ProjectReference Include="..\CSharpShaders\Csl.Types\Csl.Types.csproj" />
     <ProjectReference Include="..\CSharpShaders\Csl.Generators\Csl.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The water shaders as they were written in SDSL, before Shaders/*.cs replaced them. Not shaders
+         of the project (the .txt keeps them out of the SDK's glob): embedded, so --water-shaders=reference
+         can run the original code against the generated one and compare the two bit for bit. -->
+    <EmbeddedResource Include="Effects\Reference\*.sdsl.txt" LogicalName="Reference/%(Filename)" />
   </ItemGroup>
 </Project>

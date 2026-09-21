@@ -77,6 +77,9 @@ public sealed class VoxelWater : IDisposable
     /// <summary>Steps taken so far.</summary>
     public int StepCount { get; private set; }
 
+    /// <summary>The amounts as of the last step, one half float per sample.</summary>
+    public Texture Amounts => amounts.Current;
+
     private readonly ShaderContext context;
 
     // The amounts swap each sub-step: a pass reads Current and writes Next.

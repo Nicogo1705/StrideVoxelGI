@@ -100,6 +100,9 @@ public sealed class SdslMember
 
     /// <summary>The initializer as written, or null.</summary>
     public string? Initializer { get; set; }
+
+    /// <summary>The HLSL semantic after the name (SV_DispatchThreadID), or null.</summary>
+    public string? Semantic { get; set; }
 }
 
 public sealed class SdslMethod
@@ -112,5 +115,41 @@ public sealed class SdslMethod
 
     public string Name { get; }
     public int Line { get; }
+    public bool IsAbstract { get; set; }
+    public bool IsOverride { get; set; }
+    public List<string> Doc { get; } = new List<string>();
+    public SdslSignature? Signature { get; set; }
     public List<SdslToken> Body { get; } = new List<SdslToken>();
+}
+
+/// <summary>Return type and parameters of a method, for stubs.</summary>
+public sealed class SdslSignature
+{
+    public SdslSignature(string returnType, string? returnGeneric)
+    {
+        ReturnType = returnType;
+        ReturnGeneric = returnGeneric;
+    }
+
+    public string ReturnType { get; }
+    public string? ReturnGeneric { get; }
+    public List<SdslParameter> Parameters { get; } = new List<SdslParameter>();
+}
+
+public sealed class SdslParameter
+{
+    public SdslParameter(string type, string? generic, string name, string? modifier)
+    {
+        Type = type;
+        Generic = generic;
+        Name = name;
+        Modifier = modifier;
+    }
+
+    public string Type { get; }
+    public string? Generic { get; }
+    public string Name { get; }
+
+    /// <summary>in, out, inout, or null.</summary>
+    public string? Modifier { get; }
 }

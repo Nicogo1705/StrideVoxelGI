@@ -803,6 +803,12 @@ public static class VoxelGridDemo
     {
         if (water is null)
             return;
+        // --water-steps: the equivalence check takes its steps in one go, reads back and quits.
+        if (WaterEquivalence.Steps > 0)
+        {
+            WaterEquivalence.Run((Game)game, water);
+            return;
+        }
         waterClock += (float)game.UpdateTime.Elapsed.TotalSeconds;
         if (waterClock < WaterStepSeconds)
             return;

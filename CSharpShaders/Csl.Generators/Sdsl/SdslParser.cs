@@ -186,6 +186,7 @@ public sealed class SdslParser
             }
 
             bool isStage = false, isStream = false, isCompose = false, isConst = false, isStatic = false, isGroupShared = false;
+            bool isAbstract = false, isOverride = false;
             while (Current.Kind == SdslTokenKind.Identifier && Modifiers.Contains(Current.Text))
             {
                 switch (Advance().Text)
@@ -196,6 +197,8 @@ public sealed class SdslParser
                     case "const": isConst = true; break;
                     case "static": isStatic = true; break;
                     case "groupshared": isGroupShared = true; break;
+                    case "abstract": isAbstract = true; break;
+                    case "override": isOverride = true; break;
                 }
             }
 
@@ -226,8 +229,10 @@ public sealed class SdslParser
             if (Peek().Is("("))
             {
                 var methodName = Advance();
-                var method = new SdslMethod(methodName.Text, methodName.Line);
-                SkipBalanced("(", ")");
+                var method = new SdslMethod(methodName.Text, methodName.Line) { IsAbstract = isAbstract, IsOverride = isOverride };
+                if (doc != null)
+                    method.Doc.AddRange(doc);
+                method.Signature = ReadParameters(new SdslSignature(typeName, genericArgument));
                 if (Current.Is("{"))
                 {
                     int depth = 0;
@@ -275,7 +280,7 @@ public sealed class SdslParser
                 if (Current.Is(":"))
                 {
                     Advance();
-                    if (Current.Kind == SdslTokenKind.Identifier) Advance();
+                    if (Current.Kind == SdslTokenKind.Identifier) member.Semantic = Advance().Text;
                 }
                 if (Current.Is("="))
                 {
@@ -304,6 +309,49 @@ public sealed class SdslParser
         }
         if (Current.Is("}"))
             Advance();
+    }
+
+    /// <summary>The parameter list, from '(' to ')' inclusive.</summary>
+    private SdslSignature ReadParameters(SdslSignature signature)
+    {
+        Advance(); // (
+        while (!AtEnd && !Current.Is(")"))
+        {
+            string? modifier = null;
+            while (Current.Kind == SdslTokenKind.Identifier && (Current.Text == "in" || Current.Text == "out" || Current.Text == "inout" || Modifiers.Contains(Current.Text)))
+            {
+                var m = Advance().Text;
+                if (m == "in" || m == "out" || m == "inout") modifier = m;
+            }
+            if (Current.Kind != SdslTokenKind.Identifier)
+            {
+                SkipBalanced("(", ")");
+                return signature;
+            }
+            var type = ReadQualifiedName();
+            string? generic = null;
+            if (Current.Is("<"))
+                generic = string.Join(", ", ReadGenericArguments());
+            var name = Current.Kind == SdslTokenKind.Identifier ? Advance().Text : "_";
+            while (Current.Is("["))
+                SkipBalanced("[", "]");
+            if (Current.Is(":"))
+            {
+                Advance();
+                if (Current.Kind == SdslTokenKind.Identifier) Advance();
+            }
+            if (Current.Is("="))
+            {
+                Advance();
+                ReadInitializer();
+            }
+            signature.Parameters.Add(new SdslParameter(type, generic, name, modifier));
+            if (Current.Is(","))
+                Advance();
+        }
+        if (Current.Is(")"))
+            Advance();
+        return signature;
     }
 
     private (string Name, string? Argument) ReadAttribute()
