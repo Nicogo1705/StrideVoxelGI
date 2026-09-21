@@ -2,5 +2,10 @@
   <Folder Name="/AssetData/">
     <Project Path="AssetData/StrideVoxelGI/StrideVoxelGI.csproj" />
   </Folder>
+  <Folder Name="/CSharpShaders/">
+    <Project Path="CSharpShaders/Csl.Generators/Csl.Generators.csproj" />
+    <Project Path="CSharpShaders/Csl.Runtime/Csl.Runtime.csproj" />
+    <Project Path="CSharpShaders/Csl.Tests/Csl.Tests.csproj" />
+  </Folder>
   <Project Path="Demo/Demo.csproj" />
 </Solution>
